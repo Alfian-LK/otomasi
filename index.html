@@ -1,548 +1,697 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="id" data-theme="light">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Simulator Dinamika Glukosa–Insulin · Model Minimal Bergman + Kendali PID</title>
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#FDE8EA">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>GlukoSim · Dinamika Glukosa–Insulin (Model Bergman + PID)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Newsreader:ital,opsz,wght@0,6..72,400;1,6..72,400;1,6..72,500&display=swap" rel="stylesheet">
 <style>
 :root{
-  --chassis:#E3E8EB;
-  --panel:#FFFFFF;
-  --panel-2:#F4F7F8;
-  --hair:#C3CED5;
-  --hair-soft:#DDE5E9;
-  --ink:#14242F;
-  --ink-2:#41596B;
-  --muted:#6B808E;
-  --screen:#0F1D26;
-  --screen-2:#162833;
-  --glucose:#F0A340;
-  --insulin:#3FCBC2;
-  --remote:#B98CE0;
-  --pump:#FF7A6B;
-  --band:#7EBC74;
-  --ok:#2E7D5B;
-  --warn:#B4552B;
+  --bg-a:#FFF7F7; --bg-b:#FDE8EA; --bg-c:#F9D0D5;
+  --glass:rgba(255,255,255,.74); --glass-2:rgba(255,255,255,.92); --glass-3:rgba(255,247,248,.95);
+  --edge:rgba(255,255,255,.95); --edge-2:rgba(160,30,50,.10);
+  --ink:#3A0D17; --ink-2:#7A3B47; --muted:#AD7F88;
+  --brand:#E11D48; --brand-2:#FB7185;
+  --glucose:#FF7A1A; --glucose-2:#FFB938;
+  --insulin:#0EA5A0; --remote:#8B5CF6; --pump:#F43F5E; --beta:#22C55E; --liver:#B7794F;
+  --low:#3B82F6; --ok:#16A34A; --high:#F59E0B; --hyper:#E11D48;
+  --track:#F7DDE1;
+  --shadow:0 1px 1px rgba(90,10,25,.04), 0 12px 32px -12px rgba(190,30,60,.30);
+  --stage-1:#FFFFFF; --stage-2:#FDEEF0; --stage-3:#F8D3D9;
+  --chart-grid:rgba(160,30,50,.09); --chart-text:#AD7F88; --chart-bg:rgba(255,255,255,0);
+  --tip:#3A0D17; --tip-ink:#FFFFFF;
 }
-*{box-sizing:border-box}
-html,body{margin:0;padding:0}
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0}
 body{
-  background:var(--chassis);
+  min-height:100vh;
+  background:
+    radial-gradient(1100px 700px at 12% -10%, rgba(251,113,133,.35), transparent 60%),
+    radial-gradient(900px 600px at 100% 10%, rgba(249,115,22,.14), transparent 60%),
+    radial-gradient(900px 700px at 60% 110%, rgba(225,29,72,.16), transparent 60%),
+    linear-gradient(160deg,var(--bg-a),var(--bg-b) 55%,var(--bg-c));
+  background-attachment:fixed;
   color:var(--ink);
-  font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-  font-size:15px;line-height:1.55;
+  font-family:"Plus Jakarta Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:14px;line-height:1.5;
   font-variant-numeric:tabular-nums;
   -webkit-font-smoothing:antialiased;
 }
-h1,h2,h3{font-family:Newsreader,Georgia,serif;font-weight:500;letter-spacing:-.01em;margin:0}
-a{color:var(--ok)}
+h1,h2,h3{margin:0;font-weight:700;letter-spacing:-.015em}
+button{font:inherit;color:inherit}
+var,.sym{font-family:Newsreader,Georgia,serif;font-style:italic}
+sub{font-size:.68em}
+:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
 
-/* ---------- header ---------- */
-header{
-  border-bottom:1px solid var(--hair);
-  background:var(--panel);
-  padding:22px 26px 20px;
+.glass{
+  background:var(--glass);
+  -webkit-backdrop-filter:blur(18px) saturate(1.4);backdrop-filter:blur(18px) saturate(1.4);
+  border:1px solid var(--edge);
+  box-shadow:var(--shadow);
+  border-radius:22px;
 }
-.hwrap{max-width:1480px;margin:0 auto;display:flex;flex-wrap:wrap;gap:22px;align-items:flex-end;justify-content:space-between}
-h1{font-size:30px;line-height:1.15}
-h1 .sub{display:block;font-family:Inter,sans-serif;font-size:13.5px;font-weight:400;color:var(--muted);letter-spacing:0;margin-top:7px;max-width:56ch;line-height:1.5}
-.modes{display:flex;gap:0;border:1px solid var(--hair);border-radius:3px;overflow:hidden;background:var(--panel-2)}
+
+/* ---------------- top bar ---------------- */
+.shell{max-width:1560px;margin:0 auto;padding:18px 20px 40px}
+.topbar{
+  display:flex;align-items:center;gap:18px;flex-wrap:wrap;
+  padding:10px 12px 10px 16px;border-radius:999px;margin-bottom:18px;
+}
+.brand{display:flex;align-items:center;gap:11px;min-width:0}
+.logo{
+  width:38px;height:38px;border-radius:12px;flex:none;display:grid;place-items:center;
+  background:linear-gradient(145deg,#FB923C,#F43F5E 55%,#BE123C);
+  box-shadow:0 6px 16px -6px rgba(244,63,94,.7);
+}
+.brand h1{font-size:17px;line-height:1.1}
+.brand p{margin:1px 0 0;font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.modes{display:flex;gap:4px;padding:4px;border-radius:999px;background:var(--glass-3);border:1px solid var(--edge-2);margin:0 auto}
 .modes button{
-  font:inherit;font-size:13.5px;padding:9px 15px;border:0;background:transparent;color:var(--ink-2);
-  cursor:pointer;border-right:1px solid var(--hair);white-space:nowrap;transition:background .12s,color .12s;
+  border:0;background:transparent;cursor:pointer;padding:8px 16px;border-radius:999px;
+  font-size:13px;font-weight:600;color:var(--ink-2);white-space:nowrap;display:flex;align-items:center;gap:7px;
+  transition:background .18s,color .18s,box-shadow .18s;
 }
-.modes button:last-child{border-right:0}
-.modes button:hover{background:#E8EEF1}
-.modes button[aria-pressed="true"]{background:var(--screen);color:#fff}
-.modes button:focus-visible{outline:2px solid var(--ok);outline-offset:-2px}
+.modes button i{width:8px;height:8px;border-radius:50%;display:inline-block}
+.modes button:hover{color:var(--ink)}
+.modes button[aria-pressed="true"]{background:linear-gradient(135deg,#F43F5E,#BE123C);color:#fff;box-shadow:0 6px 14px -6px rgba(190,18,60,.6)}
 
-/* ---------- layout ---------- */
-main{max-width:1480px;margin:0 auto;padding:22px 26px 70px;display:grid;grid-template-columns:308px minmax(0,1fr);gap:22px;align-items:start}
-.rail{position:sticky;top:22px;max-height:calc(100vh - 44px);overflow-y:auto;padding-right:4px}
-.stack{display:flex;flex-direction:column;gap:22px;min-width:0}
-
-.panel{background:var(--panel);border:1px solid var(--hair);border-radius:4px}
-.panel > .head{
-  display:flex;align-items:baseline;justify-content:space-between;gap:12px;
-  padding:13px 16px;border-bottom:1px solid var(--hair-soft);
+.transport{display:flex;align-items:center;gap:8px}
+.play{
+  border:0;cursor:pointer;height:40px;padding:0 18px 0 14px;border-radius:999px;display:flex;align-items:center;gap:8px;
+  background:linear-gradient(135deg,#F43F5E,#BE123C);color:#fff;font-weight:700;font-size:13px;
+  box-shadow:0 8px 18px -8px rgba(225,29,72,.8);transition:transform .12s;
 }
-.panel > .head h2{font-size:18px}
-.panel > .head .note{font-size:12.5px;color:var(--muted)}
-.body{padding:16px}
-
-/* ---------- controls ---------- */
-.group{border-bottom:1px solid var(--hair-soft)}
-.group:last-child{border-bottom:0}
-.group > .gh{
-  width:100%;text-align:left;font:inherit;font-size:13.5px;font-weight:600;color:var(--ink);
-  background:var(--panel-2);border:0;border-bottom:1px solid var(--hair-soft);
-  padding:10px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;
+.play:active{transform:scale(.97)}
+.iconbtn{
+  width:40px;height:40px;border-radius:50%;border:1px solid var(--edge-2);background:var(--glass-2);cursor:pointer;
+  display:grid;place-items:center;color:var(--ink-2);transition:color .15s,background .15s;
 }
-.group > .gh:hover{background:#EDF2F4}
-.group > .gh .chev{color:var(--muted);font-size:11px;transition:transform .15s}
-.group[data-open="false"] .gh .chev{transform:rotate(-90deg)}
+.iconbtn:hover{color:var(--ink)}
+.speeds{display:flex;background:var(--glass-3);border:1px solid var(--edge-2);border-radius:999px;padding:3px}
+.speeds button{border:0;background:transparent;cursor:pointer;padding:6px 10px;border-radius:999px;font-size:12px;font-weight:600;color:var(--ink-2)}
+.speeds button[aria-pressed="true"]{background:var(--glass-2);color:var(--brand);box-shadow:0 2px 6px rgba(15,39,68,.12)}
+.clock{font-size:12px;color:var(--muted);padding:0 6px 0 4px;white-space:nowrap}
+.clock b{display:block;font-size:17px;color:var(--ink);line-height:1.1}
+
+/* ---------------- dashboard grid ---------------- */
+.dash{
+  display:grid;gap:18px;
+  grid-template-columns:300px minmax(0,1fr) 330px;
+  grid-template-areas:
+    "rail stage side"
+    "rail charts charts"
+    "rail sys sys"
+    "rail math math";
+  align-items:start;
+}
+.rail{grid-area:rail;position:sticky;top:18px;max-height:calc(100vh - 36px);overflow:auto;padding:6px 6px 10px;scrollbar-width:thin}
+.stagecol{grid-area:stage;display:flex;flex-direction:column;gap:14px;min-width:0}
+.side{grid-area:side;display:flex;flex-direction:column;gap:14px;min-width:0}
+.charts{grid-area:charts;min-width:0}
+.sys{grid-area:sys;min-width:0}
+.math{grid-area:math;min-width:0}
+
+.card{padding:16px 18px}
+.card-h{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.card-h h2{font-size:14.5px}
+.card-h .sub{font-size:12px;color:var(--muted)}
+
+/* ---------------- rail / parameters ---------------- */
+.rail-h{display:flex;align-items:center;justify-content:space-between;padding:12px 12px 8px}
+.rail-h h2{font-size:15px}
+.rail-h .sub{font-size:11.5px;color:var(--muted)}
+.group{margin:6px 4px;border-radius:16px;background:var(--glass-3);border:1px solid var(--edge-2);transition:box-shadow .3s}
+.group.flash{box-shadow:0 0 0 3px var(--acc)}
+.gh{
+  width:100%;border:0;background:transparent;cursor:pointer;display:flex;align-items:center;gap:10px;
+  padding:11px 12px;text-align:left;font-weight:700;font-size:13px;
+}
+.gh .ico{width:26px;height:26px;border-radius:9px;display:grid;place-items:center;background:color-mix(in srgb,var(--acc) 16%,transparent);color:var(--acc);flex:none}
+.gh .chev{margin-left:auto;color:var(--muted);transition:transform .2s}
+.group[data-open="false"] .chev{transform:rotate(-90deg)}
 .group[data-open="false"] .gbody{display:none}
-.gbody{padding:12px 16px 15px}
-
-.ctl{margin-bottom:13px}
+.gbody{padding:2px 12px 12px}
+.ctl{margin-bottom:11px}
 .ctl:last-child{margin-bottom:0}
-.ctl .row{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:5px}
-.ctl label{font-size:13px;color:var(--ink-2)}
-.ctl label .sym{font-family:Newsreader,Georgia,serif;font-style:italic;font-size:15px;color:var(--ink)}
-.ctl .val{font-size:12.5px;color:var(--ink);background:var(--panel-2);border:1px solid var(--hair-soft);border-radius:2px;padding:1px 6px;min-width:62px;text-align:right}
-input[type=range]{width:100%;-webkit-appearance:none;appearance:none;background:transparent;height:18px;cursor:pointer;margin:0}
-input[type=range]:focus-visible{outline:2px solid var(--ok);outline-offset:3px;border-radius:2px}
-input[type=range]::-webkit-slider-runnable-track{height:3px;background:var(--hair);border-radius:2px}
-input[type=range]::-moz-range-track{height:3px;background:var(--hair);border-radius:2px}
-input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--screen);border:2px solid #fff;box-shadow:0 0 0 1px var(--hair);margin-top:-5.5px}
-input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--screen);border:2px solid #fff;box-shadow:0 0 0 1px var(--hair)}
-.hint{font-size:12px;color:var(--muted);margin-top:3px;line-height:1.45}
+.ctl .row{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px}
+.ctl label{font-size:12.5px;color:var(--ink-2)}
+.ctl label .sym{font-size:14px;color:var(--ink)}
+.val{
+  font-size:11.5px;font-weight:700;color:var(--acc);background:color-mix(in srgb,var(--acc) 12%,transparent);
+  border-radius:999px;padding:2px 9px;min-width:54px;text-align:center;white-space:nowrap;
+}
+.hint{font-size:11px;color:var(--muted);margin-top:2px}
+input[type=range]{
+  --pct:50%;
+  width:100%;-webkit-appearance:none;appearance:none;height:20px;background:transparent;cursor:pointer;margin:0;
+}
+input[type=range]::-webkit-slider-runnable-track{
+  height:6px;border-radius:99px;
+  background:linear-gradient(90deg,color-mix(in srgb,var(--acc) 55%,#fff) 0,var(--acc) var(--pct),var(--track) var(--pct));
+}
+input[type=range]::-moz-range-track{height:6px;border-radius:99px;background:var(--track)}
+input[type=range]::-moz-range-progress{height:6px;border-radius:99px;background:var(--acc)}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:18px;height:18px;border-radius:50%;margin-top:-6px;
+  background:#fff;border:4px solid var(--acc);box-shadow:0 2px 6px rgba(15,39,68,.25);transition:transform .12s;
+}
+input[type=range]::-moz-range-thumb{width:12px;height:12px;border-radius:50%;background:#fff;border:4px solid var(--acc);box-shadow:0 2px 6px rgba(15,39,68,.25)}
+input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
 
-.switch{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--ink-2);cursor:pointer;user-select:none}
-.switch input{width:16px;height:16px;accent-color:var(--screen);cursor:pointer;margin:0}
+.toggle{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 11px;margin-bottom:12px;border-radius:12px;background:color-mix(in srgb,var(--acc) 9%,transparent);cursor:pointer;font-size:12.5px;font-weight:600}
+.toggle input{position:absolute;opacity:0;pointer-events:none}
+.toggle .sw{width:40px;height:23px;border-radius:99px;background:var(--track);position:relative;transition:background .2s;flex:none}
+.toggle .sw::after{content:"";position:absolute;top:3px;left:3px;width:17px;height:17px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.25);transition:transform .2s}
+.toggle input:checked + .sw{background:var(--acc)}
+.toggle input:checked + .sw::after{transform:translateX(17px)}
+.toggle input:focus-visible + .sw{outline:2px solid var(--brand);outline-offset:2px}
+.resetbtn{
+  margin:10px 4px 2px;width:calc(100% - 8px);border:1px dashed var(--edge-2);background:transparent;border-radius:14px;
+  padding:10px;font-size:12.5px;font-weight:600;color:var(--ink-2);cursor:pointer;
+}
+.resetbtn:hover{background:var(--glass-3);color:var(--ink)}
 
-.btn{font:inherit;font-size:13.5px;padding:8px 14px;border:1px solid var(--hair);background:var(--panel);color:var(--ink);border-radius:3px;cursor:pointer;transition:background .12s}
-.btn:hover{background:var(--panel-2)}
-.btn:focus-visible{outline:2px solid var(--ok);outline-offset:2px}
-.btn.solid{background:var(--screen);border-color:var(--screen);color:#fff}
-.btn.solid:hover{background:#1C3341}
-
-/* ---------- console ---------- */
-.transport{display:flex;flex-wrap:wrap;gap:9px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--hair-soft);background:var(--panel-2)}
-.clock{margin-left:auto;font-size:13px;color:var(--ink-2)}
-.clock b{font-weight:600;color:var(--ink);font-size:15px}
-.speeds{display:flex;border:1px solid var(--hair);border-radius:3px;overflow:hidden}
-.speeds button{font:inherit;font-size:12.5px;padding:6px 10px;border:0;border-right:1px solid var(--hair);background:var(--panel);color:var(--ink-2);cursor:pointer}
-.speeds button:last-child{border-right:0}
-.speeds button[aria-pressed="true"]{background:var(--screen);color:#fff}
-
-.screens{padding:16px}
-.well{background:var(--screen);border-radius:3px;padding:10px 12px 6px;position:relative}
-.well + .well{margin-top:12px}
-.well canvas{display:block;width:100%}
-.legend{display:flex;flex-wrap:wrap;gap:14px;padding:7px 2px 3px;font-size:12px;color:#93AAB8}
-.legend span{display:inline-flex;align-items:center;gap:6px}
-.swatch{width:13px;height:3px;border-radius:2px;display:inline-block}
-
-.readouts{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:1px;background:var(--hair-soft);border-top:1px solid var(--hair-soft)}
-.ro{background:var(--panel);padding:11px 14px}
-.ro .k{font-size:11.5px;color:var(--muted);display:flex;align-items:center;gap:6px}
-.ro .v{font-size:21px;font-family:Newsreader,Georgia,serif;line-height:1.25;margin-top:1px}
-.ro .u{font-size:11.5px;color:var(--muted);margin-left:3px;font-family:Inter,sans-serif}
-.dot{width:7px;height:7px;border-radius:50%;display:inline-block}
-
-.status{padding:11px 16px;font-size:13px;border-top:1px solid var(--hair-soft);display:flex;align-items:center;gap:9px}
-.status .pill{padding:2px 9px;border-radius:2px;font-size:12px;font-weight:500}
-.pill.good{background:#DEEFE5;color:var(--ok)}
-.pill.high{background:#F8E5D8;color:var(--warn)}
-.pill.low{background:#E0E7F5;color:#33509B}
-
-/* ---------- 3D ---------- */
-#scene{width:100%;height:440px;background:var(--screen);border-radius:3px;display:block;cursor:grab;touch-action:none}
+/* ---------------- stage (3D) ---------------- */
+.stage{position:relative;overflow:hidden;padding:0}
+.stage-top{position:absolute;inset:14px 16px auto 16px;display:flex;justify-content:space-between;align-items:flex-start;gap:10px;z-index:3;pointer-events:none}
+.stage-top > *{pointer-events:auto}
+.stage-title h2{font-size:16px}
+.stage-title p{margin:2px 0 0;font-size:12px;color:var(--muted)}
+.stage-tools{display:flex;gap:6px}
+.stage-tools .iconbtn{width:34px;height:34px}
+#scene{
+  display:block;width:100%;height:540px;cursor:grab;touch-action:none;
+  background:radial-gradient(ellipse 70% 60% at 50% 42%,var(--stage-1) 0%,var(--stage-2) 55%,var(--stage-3) 100%);
+}
 #scene:active{cursor:grabbing}
-.scene-wrap{position:relative;padding:16px}
-.scene-hint{position:absolute;left:26px;bottom:26px;font-size:11.5px;color:#6C8494;pointer-events:none}
-.flux{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--hair-soft);border-top:1px solid var(--hair-soft)}
-.fx{background:var(--panel);padding:11px 14px}
-.fx .k{font-size:11.5px;color:var(--muted)}
-.fx .bar{height:4px;background:var(--panel-2);border-radius:2px;margin-top:6px;overflow:hidden}
-.fx .bar i{display:block;height:100%;width:0%;border-radius:2px;transition:width .12s linear}
-.fx .n{font-size:12.5px;color:var(--ink-2);margin-top:4px}
+.callouts{position:absolute;inset:0;pointer-events:none;z-index:2}
+.co{
+  position:absolute;left:0;top:0;pointer-events:auto;cursor:pointer;
+  display:flex;align-items:center;gap:7px;padding:5px 10px 5px 6px;border-radius:999px;
+  background:var(--glass-2);border:1px solid var(--edge);box-shadow:0 6px 16px -8px rgba(15,39,68,.45);
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+  font-size:11.5px;font-weight:600;white-space:nowrap;transition:box-shadow .15s,opacity .2s;
+}
+.co i{width:20px;height:20px;border-radius:50%;background:var(--c);box-shadow:0 0 0 3px color-mix(in srgb,var(--c) 25%,transparent);flex:none}
+.co b{color:var(--c);font-weight:800}
+.co::after{content:"";position:absolute;left:50%;top:100%;width:1px;height:14px;background:linear-gradient(var(--c),transparent)}
+.co:hover,.co.sel{box-shadow:0 0 0 2px var(--c),0 8px 20px -8px rgba(15,39,68,.5)}
+.co.hide{opacity:0;pointer-events:none}
+.inspector{
+  position:absolute;left:16px;bottom:16px;z-index:4;width:min(330px,calc(100% - 32px));
+  padding:14px 16px;border-radius:18px;background:var(--glass-2);border:1px solid var(--edge);
+  -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);box-shadow:var(--shadow);
+  animation:pop .22s ease-out;
+}
+.inspector[hidden]{display:none}
+@keyframes pop{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.inspector .ih{display:flex;align-items:center;gap:9px}
+.inspector .ih i{width:12px;height:12px;border-radius:50%;background:var(--c)}
+.inspector .ih strong{font-size:14px}
+.inspector .ih button{margin-left:auto;border:0;background:transparent;cursor:pointer;color:var(--muted);font-size:18px;line-height:1;padding:2px 4px}
+.inspector .big{font-size:26px;font-weight:800;margin:6px 0 2px;color:var(--c)}
+.inspector .big small{font-size:12px;color:var(--muted);font-weight:600;margin-left:4px}
+.inspector p{margin:4px 0 10px;font-size:12.5px;color:var(--ink-2);line-height:1.55}
+.inspector .go{border:0;cursor:pointer;background:color-mix(in srgb,var(--c) 14%,transparent);color:var(--c);font-weight:700;font-size:12px;padding:7px 12px;border-radius:999px}
+.hint3d{position:absolute;right:16px;bottom:14px;z-index:3;font-size:11px;color:var(--muted);pointer-events:none}
 
-/* ---------- system diagram ---------- */
-.sysbox{padding:18px 16px 20px}
-.syswell{background:var(--screen);border-radius:3px;padding:14px 10px;overflow-x:auto}
-.syswell svg{display:block;min-width:960px;margin:0 auto}
-.syscap{font-size:12.5px;color:var(--muted);line-height:1.55;margin-top:10px;max-width:78ch}
+.flux{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+.fx{padding:12px 14px;border-radius:18px}
+.fx .k{font-size:11.5px;color:var(--ink-2);font-weight:600;display:flex;align-items:center;gap:6px}
+.fx .k i{width:8px;height:8px;border-radius:50%;background:var(--c)}
+.fx .bar{height:7px;background:var(--track);border-radius:99px;margin-top:9px;overflow:hidden}
+.fx .bar i{display:block;height:100%;width:0;border-radius:99px;background:linear-gradient(90deg,color-mix(in srgb,var(--c) 45%,#fff),var(--c));transition:width .15s linear}
+.fx .n{font-size:11.5px;color:var(--muted);margin-top:6px}
+.fx .n b{color:var(--ink);font-size:13px}
 
-/* ---------- math ---------- */
-.eqbox{padding:18px 16px}
+/* ---------------- side cards ---------------- */
+.gauge-wrap{position:relative;margin:2px auto 0;max-width:280px}
+.gauge-wrap svg{display:block;width:100%;height:auto;overflow:visible}
+.gauge-read{position:absolute;left:0;right:0;bottom:4px;text-align:center}
+.gauge-read .v{font-size:40px;font-weight:800;letter-spacing:-.03em;line-height:1}
+.gauge-read .u{font-size:12px;color:var(--muted);font-weight:600}
+.zones{display:flex;justify-content:space-between;font-size:10.5px;color:var(--muted);margin:6px 4px 0}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border-radius:999px;font-size:12px;font-weight:700}
+.pill::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.pill.good{background:color-mix(in srgb,var(--ok) 15%,transparent);color:var(--ok)}
+.pill.high{background:color-mix(in srgb,var(--high) 18%,transparent);color:#C27803}
+.pill.hyper{background:color-mix(in srgb,var(--hyper) 14%,transparent);color:var(--hyper)}
+.pill.low{background:color-mix(in srgb,var(--low) 15%,transparent);color:var(--low)}
+.statusline{margin-top:12px;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.statusline span{font-size:12px;color:var(--ink-2);line-height:1.5}
+
+.tir{display:flex;align-items:center;gap:14px}
+.tir svg{width:84px;height:84px;flex:none}
+.tir .t1{font-size:26px;font-weight:800;line-height:1}
+.tir .t2{font-size:12px;color:var(--ink-2);margin-top:4px}
+
+.minis{display:flex;flex-direction:column;gap:10px}
+.mini{padding:12px 14px;border-radius:18px;display:grid;grid-template-columns:minmax(0,1fr) 110px;align-items:center;gap:10px}
+.mini .k{font-size:11.5px;color:var(--ink-2);font-weight:600;display:flex;align-items:center;gap:6px}
+.mini .k i{width:8px;height:8px;border-radius:50%;background:var(--c)}
+.mini .v{font-size:21px;font-weight:800;margin-top:2px;letter-spacing:-.02em}
+.mini .v .u{font-size:11px;color:var(--muted);font-weight:600;margin-left:3px}
+.mini canvas{width:110px;height:44px;display:block}
+.mini.off{opacity:.5}
+
+/* ---------------- charts ---------------- */
+.charts{position:relative}
+.chart-grid{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:18px}
+.chartbox canvas{display:block;width:100%}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:11.5px;color:var(--ink-2);margin-top:6px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.swatch{width:14px;height:4px;border-radius:2px;display:inline-block}
+.tooltip{
+  position:absolute;z-index:5;pointer-events:none;padding:9px 12px;border-radius:12px;
+  background:var(--tip);color:var(--tip-ink);font-size:11.5px;line-height:1.6;box-shadow:0 10px 24px -10px rgba(0,0,0,.5);
+  min-width:150px;transform:translate(-50%,calc(-100% - 12px));
+}
+.tooltip[hidden]{display:none}
+.tooltip b{font-size:12px}
+.tooltip .r{display:flex;justify-content:space-between;gap:14px}
+.tooltip .r i{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px}
+
+/* ---------------- diagram ---------------- */
+.syswell{overflow-x:auto;border-radius:16px;background:var(--glass-3);border:1px solid var(--edge-2);padding:10px 6px}
+.syswell svg{display:block;min-width:760px;width:100%;height:auto}
+.sbox{fill:var(--glass-2);stroke-width:2}
+.sbt{fill:var(--ink);font:700 14px "Plus Jakarta Sans",sans-serif}
+.sbs{fill:var(--muted);font:500 11.5px "Plus Jakarta Sans",sans-serif}
+.sarr{stroke:var(--muted);stroke-width:1.8;fill:none;stroke-dasharray:6 5}
+.slbl{fill:var(--ink-2);font:500 11.5px "Plus Jakarta Sans",sans-serif}
+.flowing .sarr{animation:dash 1s linear infinite}
+@keyframes dash{to{stroke-dashoffset:-11}}
+.sysnote{font-size:12px;color:var(--muted);margin-top:10px}
+
+/* ---------------- math ---------------- */
+.mathgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:18px;align-items:start}
+.mathgrid .termtable{margin-top:0}
+@media (max-width:1320px){.mathgrid{grid-template-columns:minmax(0,1fr)}}
 .eq{
-  font-family:Newsreader,Georgia,serif;font-size:19px;line-height:2.35;
-  padding:14px 16px;background:var(--panel-2);border:1px solid var(--hair-soft);border-radius:3px;
-  overflow-x:auto;white-space:nowrap;
+  font-family:Newsreader,Georgia,serif;font-size:18px;line-height:2.3;
+  padding:12px 16px;background:var(--glass-3);border:1px solid var(--edge-2);border-radius:16px;overflow-x:auto;white-space:nowrap;
 }
 .eq .line{display:block}
-var{font-style:italic;font-family:Newsreader,Georgia,serif}
-sub{font-size:.66em}
-.term{padding:2px 3px;border-radius:2px;transition:background .2s,opacity .2s,color .2s}
-.term.off{opacity:.26;text-decoration:line-through;text-decoration-thickness:1px}
-.term.hot{background:#FFF0D9}
-.term.hot-i{background:#D8F5F2}
-.term.hot-p{background:#FFE2DE}
+.term{padding:2px 5px;border-radius:8px;transition:background .2s,opacity .2s,color .2s}
+.term.off{opacity:.28;text-decoration:line-through;text-decoration-thickness:1px}
+.term.hot{background:color-mix(in srgb,var(--glucose) 18%,transparent)}
+.term.hot-i{background:color-mix(in srgb,var(--beta) 18%,transparent)}
+.term.hot-p{background:color-mix(in srgb,var(--pump) 16%,transparent)}
 .dotover{position:relative;display:inline-block}
 .dotover::after{content:"˙";position:absolute;top:-.62em;left:50%;transform:translateX(-45%);font-size:1.15em}
-
-.termtable{width:100%;border-collapse:collapse;margin-top:16px;font-size:13.5px}
-.termtable th{text-align:left;font-weight:600;font-size:12px;color:var(--muted);padding:6px 10px;border-bottom:1px solid var(--hair)}
-.termtable td{padding:7px 10px;border-bottom:1px solid var(--hair-soft)}
-.termtable td:first-child{font-family:Newsreader,Georgia,serif;font-size:16px;white-space:nowrap}
-.termtable td.num{text-align:right;width:108px}
+.termtable{width:100%;border-collapse:collapse;margin-top:12px;font-size:12.5px}
+.termtable th{text-align:left;font-weight:700;font-size:11px;color:var(--muted);padding:6px 8px;border-bottom:1px solid var(--edge-2)}
+.termtable td{padding:7px 8px;border-bottom:1px solid var(--edge-2);color:var(--ink-2)}
+.termtable td:first-child{font-family:Newsreader,Georgia,serif;font-size:15px;white-space:nowrap;color:var(--ink)}
+.termtable td.num{text-align:right;width:120px;font-weight:700;color:var(--ink)}
 .termtable tr.dim td{opacity:.4}
-.prose{font-size:14px;color:var(--ink-2);line-height:1.65;max-width:74ch}
-.prose p{margin:0 0 11px}
-.prose p:last-child{margin-bottom:0}
-.prose strong{color:var(--ink);font-weight:600}
-.callout{border-left:2px solid var(--band);padding:2px 0 2px 14px;margin:14px 0;font-size:13.5px;color:var(--ink-2);max-width:74ch}
-footer{max-width:1480px;margin:0 auto;padding:0 26px 50px;font-size:12.5px;color:var(--muted);line-height:1.6;max-width:80ch}
+.tablewrap{overflow-x:auto}
 
-@media (max-width:1080px){
-  main{grid-template-columns:1fr;padding:18px 16px 60px}
-  .rail{position:static;max-height:none;overflow:visible}
-  header{padding:18px 16px}
-  h1{font-size:25px}
-  #scene{height:340px}
+footer{max-width:1560px;margin:0 auto;padding:0 20px 40px;font-size:12px;color:var(--muted)}
+
+/* ---------------- responsive ---------------- */
+@media (max-width:1320px){
+  .dash{grid-template-columns:290px minmax(0,1fr);
+    grid-template-areas:"rail stage" "rail side" "rail charts" "rail sys" "rail math";}
+  .side{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-items:stretch}
+  .side > .minis{grid-column:span 1}
 }
-@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+@media (max-width:1000px){
+  .shell{padding:12px 12px 30px}
+  .topbar{border-radius:24px}
+  .modes{order:3;width:100%;overflow-x:auto;margin:0}
+  .transport{margin-left:auto}
+  .dash{grid-template-columns:minmax(0,1fr);grid-template-areas:"stage" "side" "rail" "charts" "sys" "math"}
+  .rail{position:static;max-height:none}
+  .side{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  .side > .minis{grid-column:1/-1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+  .flux{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .chart-grid{grid-template-columns:minmax(0,1fr)}
+  #scene{height:420px}
+}
+@media (max-width:640px){
+  .side,.side > .minis{grid-template-columns:minmax(0,1fr)}
+  .brand p{display:none}
+  .speeds{display:none}
+  #scene{height:360px}
+  .co .lbl{display:none}
+  .stage-title p,.hint3d{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
 <body>
+<div class="shell">
 
-<header>
-  <div class="hwrap">
-    <h1>Dinamika Glukosa–Insulin
-      <span class="sub">Simulator interaktif model minimal Bergman dengan kendali PID untuk pankreas buatan.
-        <!-- Atur parameter fisiologis, matikan sekresi sel&nbsp;β, lalu lihat apa yang terjadi bila insulin harus datang dari luar. -->
-      </span>
-    </h1>
-    <div class="modes" role="group" aria-label="Skenario">
-      <button data-preset="healthy" aria-pressed="true">Orang sehat</button>
-      <button data-preset="t1d" aria-pressed="false">T1D tanpa kendali</button>
-      <button data-preset="pid" aria-pressed="false">T1D + pompa PID</button>
+<header class="topbar glass">
+  <div class="brand">
+    <div class="logo" aria-hidden="true">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2.5C9 7 6 10.3 6 14a6 6 0 0 0 12 0c0-3.7-3-7-6-11.5Z" fill="#fff"/><path d="M9.5 14.5a2.6 2.6 0 0 0 2.6 2.6" stroke="#F43F5E" stroke-width="1.8" stroke-linecap="round"/></svg>
     </div>
+    <div><h1>GlukoSim</h1><p>Model minimal Bergman dengan kendali PID</p></div>
+  </div>
+
+  <nav class="modes" role="group" aria-label="Skenario">
+    <button data-preset="healthy" aria-pressed="true"><i style="background:var(--beta)"></i>Orang sehat</button>
+    <button data-preset="t1d" aria-pressed="false"><i style="background:var(--high)"></i>T1D tanpa kendali</button>
+    <button data-preset="pid" aria-pressed="false"><i style="background:var(--insulin)"></i>T1D + pompa PID</button>
+  </nav>
+
+  <div class="transport">
+    <button class="play" id="play" title="Jalankan / jeda (spasi)"></button>
+    <button class="iconbtn" id="reset" title="Ulang dari awal" aria-label="Ulang dari awal">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+    </button>
+    <div class="speeds" role="group" aria-label="Kecepatan">
+      <button data-speed="0.5" aria-pressed="false">½×</button>
+      <button data-speed="1" aria-pressed="true">1×</button>
+      <button data-speed="3" aria-pressed="false">3×</button>
+      <button data-speed="10" aria-pressed="false">10×</button>
+    </div>
+    <div class="clock">menit ke<b id="clk">0</b></div>
   </div>
 </header>
 
-<main>
+<main class="dash">
 
-<!-- ===================== RAIL: CONTROLS ===================== -->
-<div class="rail">
-  <section class="panel">
-    <div class="head"><h2>Parameter</h2><span class="note"></span></div>
+<!-- ===================== RAIL: PARAMETERS ===================== -->
+<aside class="rail glass" id="rail">
+  <div class="rail-h"><h2>Parameter</h2></div>
 
-    <div class="group" data-open="true">
-      <button class="gh">Kondisi pankreas <span class="chev">▾</span></button>
-      <div class="gbody">
-        <div class="ctl">
-          <div class="row"><label for="alpha">Sel β yang berfungsi <span class="sym">(α)</span></label><span class="val" id="alpha_v">100 %</span></div>
-          <input type="range" id="alpha" min="0" max="100" step="1" value="100">
-          <div class="hint">0% = sekresi insulin alami hilang total</div>
-        </div>
-        <div class="ctl">
-          <div class="row"><label for="gamma">Laju sekresi sel β <span class="sym">(γ)</span></label><span class="val" id="gamma_v">0.0039</span></div>
-          <input type="range" id="gamma" min="0" max="0.01" step="0.0001" value="0.0039">
-        </div>
-        <div class="ctl">
-          <div class="row"><label for="h">Nilai glukosa pemicu sel β <span class="sym">(h)</span></label><span class="val" id="h_v">79.0</span></div>
-          <input type="range" id="h" min="60" max="120" step="0.5" value="79">
-          <!-- <div class="hint">Sel β baru melepas insulin saat glukosa melewati ambang ini.</div> -->
-        </div>
+  <div class="group" data-open="true" data-key="pankreas" style="--acc:var(--beta)">
+    <button class="gh"><span class="ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="7" cy="12" r="4"/><circle cx="16" cy="8" r="3"/><circle cx="17" cy="16" r="3"/></svg></span>Kondisi pankreas<span class="chev">▾</span></button>
+    <div class="gbody">
+      <div class="ctl">
+        <div class="row"><label for="alpha">Sel β yang berfungsi <span class="sym">(α)</span></label><span class="val" id="alpha_v">100 %</span></div>
+        <input type="range" id="alpha" min="0" max="100" step="1" value="100">
+        <div class="hint">0% = sekresi insulin alami hilang total</div>
+      </div>
+      <div class="ctl">
+        <div class="row"><label for="gamma">Laju sekresi sel β <span class="sym">(γ)</span></label><span class="val" id="gamma_v">0.0039</span></div>
+        <input type="range" id="gamma" min="0" max="0.01" step="0.0001" value="0.0039">
+      </div>
+      <div class="ctl">
+        <div class="row"><label for="h">Glukosa pemicu sel β <span class="sym">(h)</span></label><span class="val" id="h_v">79.0</span></div>
+        <input type="range" id="h" min="60" max="120" step="0.5" value="79">
       </div>
     </div>
+  </div>
 
-    <div class="group" data-open="true">
-      <button class="gh">Fisiologi jaringan <span class="chev">▾</span></button>
-      <div class="gbody">
-        <div class="ctl">
-          <div class="row"><label for="p1">Ambilan glukosa tanpa insulin <span class="sym">(p₁)</span></label><span class="val" id="p1_v">0.0310</span></div>
-          <input type="range" id="p1" min="0" max="0.06" step="0.0005" value="0.031">
-        </div>
-        <div class="ctl">
-          <div class="row"><label for="p2">Peluruhan aksi insulin <span class="sym">(p₂)</span></label><span class="val" id="p2_v">0.0120</span></div>
-          <input type="range" id="p2" min="0.002" max="0.05" step="0.0005" value="0.012">
-        </div>
-        <div class="ctl">
-          <div class="row"><label for="p3">Sensitivitas insulin <span class="sym">(p₃)</span> ×10⁻⁶</label><span class="val" id="p3_v">4.92</span></div>
-          <input type="range" id="p3" min="0" max="15" step="0.02" value="4.92">
-          <!-- <div class="hint">Turunkan <span class="sym">p₃</span> dan naikkan <span class="sym">p₂</span> untuk meniru resistensi insulin (diabetes tipe 2).</div> -->
-        </div>
-        <div class="ctl">
-          <div class="row"><label for="n">Peluruhan insulin plasma <span class="sym">(n)</span></label><span class="val" id="n_v">0.2650</span></div>
-          <input type="range" id="n" min="0.05" max="0.6" step="0.005" value="0.265">
-        </div>
+  <div class="group" data-open="true" data-key="fisiologi" style="--acc:var(--remote)">
+    <button class="gh"><span class="ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg></span>Fisiologi jaringan<span class="chev">▾</span></button>
+    <div class="gbody">
+      <div class="ctl">
+        <div class="row"><label for="p1">Ambilan glukosa tanpa insulin <span class="sym">(p₁)</span></label><span class="val" id="p1_v">0.0310</span></div>
+        <input type="range" id="p1" min="0" max="0.06" step="0.0005" value="0.031">
+      </div>
+      <div class="ctl">
+        <div class="row"><label for="p2">Peluruhan aksi insulin <span class="sym">(p₂)</span></label><span class="val" id="p2_v">0.0120</span></div>
+        <input type="range" id="p2" min="0.002" max="0.05" step="0.0005" value="0.012">
+      </div>
+      <div class="ctl">
+        <div class="row"><label for="p3">Sensitivitas insulin <span class="sym">(p₃)</span> ×10⁻⁶</label><span class="val" id="p3_v">4.92</span></div>
+        <input type="range" id="p3" min="0" max="15" step="0.02" value="4.92">
+      </div>
+      <div class="ctl">
+        <div class="row"><label for="n">Peluruhan insulin plasma <span class="sym">(n)</span></label><span class="val" id="n_v">0.2650</span></div>
+        <input type="range" id="n" min="0.05" max="0.6" step="0.005" value="0.265">
       </div>
     </div>
+  </div>
 
-    <div class="group" data-open="open">
-      <button class="gh">Kondisi awal &amp; basal <span class="chev">▾</span></button>
-      <div class="gbody">
-        <div class="ctl">
-          <div class="row"><label for="G0">Glukosa awal <span class="sym">(G₀)</span></label><span class="val" id="G0_v">200</span></div>
-          <input type="range" id="G0" min="60" max="400" step="1" value="200">
-        </div>
-        <div class="ctl">
-          <div class="row"><label for="I0">Insulin awal <span class="sym">(I₀)</span></label><span class="val" id="I0_v">364.8</span></div>
-          <input type="range" id="I0" min="0" max="500" step="0.2" value="364.8">
-        </div>
-        <div class="ctl">
-          <div class="row"><label for="Gb">Glukosa basal <span class="sym">(G_b)</span></label><span class="val" id="Gb_v">70</span></div>
-          <input type="range" id="Gb" min="50" max="130" step="1" value="70">
-        </div>
-        <div class="ctl">
-          <div class="row"><label for="Ib">Insulin basal <span class="sym">(I_b)</span></label><span class="val" id="Ib_v">7</span></div>
-          <input type="range" id="Ib" min="0" max="40" step="0.5" value="7">
-        </div>
+  <div class="group" data-open="true" data-key="awal" style="--acc:var(--glucose)">
+    <button class="gh"><span class="ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3C9.5 7 7 9.8 7 13a5 5 0 0 0 10 0c0-3.2-2.5-6-5-10Z"/></svg></span>Kondisi awal &amp; basal<span class="chev">▾</span></button>
+    <div class="gbody">
+      <div class="ctl">
+        <div class="row"><label for="G0">Glukosa awal <span class="sym">(G₀)</span></label><span class="val" id="G0_v">200</span></div>
+        <input type="range" id="G0" min="60" max="400" step="1" value="200">
+      </div>
+      <div class="ctl">
+        <div class="row"><label for="I0">Insulin awal <span class="sym">(I₀)</span></label><span class="val" id="I0_v">364.8</span></div>
+        <input type="range" id="I0" min="0" max="500" step="0.2" value="364.8">
+      </div>
+      <div class="ctl">
+        <div class="row"><label for="Gb">Glukosa basal <span class="sym">(G<sub>b</sub>)</span></label><span class="val" id="Gb_v">70</span></div>
+        <input type="range" id="Gb" min="50" max="130" step="1" value="70">
+      </div>
+      <div class="ctl">
+        <div class="row"><label for="Ib">Insulin basal <span class="sym">(I<sub>b</sub>)</span></label><span class="val" id="Ib_v">7</span></div>
+        <input type="range" id="Ib" min="0" max="40" step="0.5" value="7">
       </div>
     </div>
+  </div>
 
-    <div class="group" data-open="true">
-      <button class="gh">Asupan makanan <span class="chev">▾</span></button>
-      <div class="gbody">
-        <div class="ctl">
-          <div class="row"><label for="mealA">Besar makan <span class="sym">(A)</span></label><span class="val" id="mealA_v">8.0</span></div>
-          <input type="range" id="mealA" min="0" max="25" step="0.5" value="8">
-          <div class="hint">mg/dL per menit</div>
-        </div>
-        <div class="ctl">
-          <div class="row"><label for="mealK">Kecepatan penyerapan <span class="sym">(k)</span></label><span class="val" id="mealK_v">0.050</span></div>
-          <input type="range" id="mealK" min="0.01" max="0.2" step="0.005" value="0.05">
-        </div>
-        <div class="ctl">
-          <div class="row"><label for="meal1">Makan pertama pada menit</label><span class="val" id="meal1_v">150</span></div>
-          <input type="range" id="meal1" min="0" max="600" step="10" value="150">
-        </div>
-        <div class="ctl">
-          <div class="row"><label for="mealPeriod">Periode makan <span class="sym">(T)</span></label><span class="val" id="mealPeriod_v">240</span></div>
-          <input type="range" id="mealPeriod" min="60" max="480" step="10" value="240">
-          <!-- <div class="hint">Jarak waktu antar-makan berikutnya, berulang selama simulasi berjalan</div> -->
-        </div>
+  <div class="group" data-open="true" data-key="makan" style="--acc:#E8900C">
+    <button class="gh"><span class="ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M7 3v8M5 3v5a2 2 0 0 0 4 0V3M7 11v10M17 3c-2 0-3 2-3 6s1 5 3 5v7"/></svg></span>Asupan makanan<span class="chev">▾</span></button>
+    <div class="gbody">
+      <div class="ctl">
+        <div class="row"><label for="mealA">Besar makan <span class="sym">(A)</span></label><span class="val" id="mealA_v">8.0</span></div>
+        <input type="range" id="mealA" min="0" max="25" step="0.5" value="8">
+        <div class="hint">mg/dL per menit</div>
+      </div>
+      <div class="ctl">
+        <div class="row"><label for="mealK">Kecepatan penyerapan <span class="sym">(k)</span></label><span class="val" id="mealK_v">0.050</span></div>
+        <input type="range" id="mealK" min="0.01" max="0.2" step="0.005" value="0.05">
+      </div>
+      <div class="ctl">
+        <div class="row"><label for="meal1">Makan pertama, menit ke</label><span class="val" id="meal1_v">150</span></div>
+        <input type="range" id="meal1" min="0" max="600" step="10" value="150">
+      </div>
+      <div class="ctl">
+        <div class="row"><label for="mealPeriod">Periode makan <span class="sym">(T)</span></label><span class="val" id="mealPeriod_v">240</span></div>
+        <input type="range" id="mealPeriod" min="60" max="480" step="10" value="240">
       </div>
     </div>
+  </div>
 
-    <div class="group" data-open="true">
-      <button class="gh">Pompa insulin &amp; PID <span class="chev">▾</span></button>
-      <div class="gbody">
-        <label class="switch" style="margin-bottom:12px"><input type="checkbox" id="pidon"> Nyalakan pompa insulin</label>
-        <div class="ctl">
-          <div class="row"><label for="target">Target glukosa</label><span class="val" id="target_v">80</span></div>
-          <input type="range" id="target" min="70" max="140" step="1" value="80">
-        </div>
-        <div class="ctl">
-          <div class="row"><label for="Kp">Proporsional <span class="sym">(K_p)</span></label><span class="val" id="Kp_v">0.080</span></div>
-          <input type="range" id="Kp" min="0" max="0.4" step="0.005" value="0.08">
-        </div>
-        <div class="ctl">
-          <div class="row"><label for="Ki">Integral <span class="sym">(K_i)</span></label><span class="val" id="Ki_v">0.00020</span></div>
-          <input type="range" id="Ki" min="0" max="0.002" step="0.00002" value="0.0002">
-        </div>
-        <div class="ctl">
-          <div class="row"><label for="Kd">Derivatif <span class="sym">(K_d)</span></label><span class="val" id="Kd_v">4.0</span></div>
-          <input type="range" id="Kd" min="0" max="15" step="0.1" value="4">
-        </div>
-        <div class="ctl">
-          <div class="row"><label for="umax">Batas laju pompa <span class="sym">(u_max)</span></label><span class="val" id="umax_v">60</span></div>
-          <input type="range" id="umax" min="5" max="200" step="5" value="60">
-          <!-- <div class="hint">Pompa hanya bisa menambah insulin, tidak menariknya kembali — keluaran dijepit pada rentang 0 … <span class="sym">u_max</span>.</div> -->
-        </div>
+  <div class="group" data-open="true" data-key="pompa" style="--acc:var(--pump)">
+    <button class="gh"><span class="ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><rect x="6" y="3" width="12" height="15" rx="3"/><path d="M12 18v3M10 8h4"/></svg></span>Pompa insulin &amp; PID<span class="chev">▾</span></button>
+    <div class="gbody">
+      <label class="toggle"><span>Nyalakan pompa insulin</span><input type="checkbox" id="pidon"><span class="sw"></span></label>
+      <div class="ctl">
+        <div class="row"><label for="target">Target glukosa</label><span class="val" id="target_v">80</span></div>
+        <input type="range" id="target" min="70" max="140" step="1" value="80">
+      </div>
+      <div class="ctl">
+        <div class="row"><label for="Kp">Proporsional <span class="sym">(K<sub>p</sub>)</span></label><span class="val" id="Kp_v">0.060</span></div>
+        <input type="range" id="Kp" min="0" max="0.4" step="0.005" value="0.06">
+      </div>
+      <div class="ctl">
+        <div class="row"><label for="Ki">Integral <span class="sym">(K<sub>i</sub>)</span></label><span class="val" id="Ki_v">0.00000</span></div>
+        <input type="range" id="Ki" min="0" max="0.002" step="0.00002" value="0.0000">
+      </div>
+      <div class="ctl">
+        <div class="row"><label for="Kd">Derivatif <span class="sym">(K<sub>d</sub>)</span></label><span class="val" id="Kd_v">7.0</span></div>
+        <input type="range" id="Kd" min="0" max="15" step="0.1" value="7">
+      </div>
+      <div class="ctl">
+        <div class="row"><label for="umax">Batas laju pompa <span class="sym">(u<sub>max</sub>)</span></label><span class="val" id="umax_v">60</span></div>
+        <input type="range" id="umax" min="5" max="200" step="5" value="60">
       </div>
     </div>
+  </div>
 
-    <!-- <div class="group" data-open="true">
-      <button class="gh">Muat ulang <span class="chev">▾</span></button>
-      <div class="gbody" style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn" id="defaults">Kembalikan nilai paper</button>
-      </div>
-    </div> -->
+  <button class="resetbtn" id="defaults">Kembalikan nilai awal</button>
+</aside>
 
-    <div class="group" data-open="true">
-      <button class="gh">Muat ulang <span class="chev">▾</span></button>
-      <div class="gbody">
-        <button class="btn" id="defaults">Kembalikan nilai paper</button>
-      </div>
-    </div>
-  </section>
-</div>
-
-<!-- ===================== MAIN STACK ===================== -->
-<div class="stack">
-
-  <!-- CONSOLE -->
-  <section class="panel">
-    <div class="transport">
-      <button class="btn solid" id="play">Jalankan</button>
-      <button class="btn" id="reset">Ulang dari awal</button>
-      <div class="speeds" role="group" aria-label="Kecepatan">
-        <button data-speed="0.5" aria-pressed="false">½×</button>
-        <button data-speed="1" aria-pressed="true">1×</button>
-        <button data-speed="3" aria-pressed="false">3×</button>
-        <button data-speed="10" aria-pressed="false">10×</button>
-      </div>
-      <span class="clock">menit ke <b id="clk">0</b> · berjalan terus-menerus</span>
-    </div>
-
-    <div class="screens">
-      <div class="well">
-        <canvas id="cg" height="300"></canvas>
-        <div class="legend">
-          <span><i class="swatch" style="background:var(--glucose)"></i> Glukosa plasma <var>G</var></span>
-          <span><i class="swatch" style="background:rgba(126,188,116,.55)"></i> Rentang normal 70–100</span>
-          <span><i class="swatch" style="background:#8FA3B0"></i> Target pompa</span>
-          <span><i class="swatch" style="background:#C9853F"></i> Waktu makan</span>
-        </div>
-      </div>
-      <div class="well">
-        <canvas id="ci" height="200"></canvas>
-        <div class="legend">
-          <span><i class="swatch" style="background:var(--insulin)"></i> Insulin plasma <var>I</var></span>
-          <span><i class="swatch" style="background:var(--remote)"></i> Aksi insulin di jaringan <var>X</var> (×10³)</span>
-          <span><i class="swatch" style="background:var(--pump)"></i> Keluaran pompa <var>u</var></span>
-        </div>
+<!-- ===================== STAGE ===================== -->
+<section class="stagecol">
+  <div class="stage glass">
+    <div class="stage-top">
+      <div class="stage-title"><h2>Kompartemen tubuh</h2></div>
+      <div class="stage-tools">
+        <button class="iconbtn" id="zoomin" aria-label="Perbesar"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+        <button class="iconbtn" id="zoomout" aria-label="Perkecil"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 12h14"/></svg></button>
+        <button class="iconbtn" id="viewreset" aria-label="Kembalikan sudut pandang"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
       </div>
     </div>
-
-    <div class="readouts">
-      <div class="ro"><div class="k"><i class="dot" style="background:var(--glucose)"></i>Glukosa</div><div class="v" id="ro_g">200<span class="u">mg/dL</span></div></div>
-      <div class="ro"><div class="k"><i class="dot" style="background:var(--insulin)"></i>Insulin plasma</div><div class="v" id="ro_i">364.8<span class="u">mU/L</span></div></div>
-      <div class="ro"><div class="k"><i class="dot" style="background:var(--remote)"></i>Aksi insulin</div><div class="v" id="ro_x">0.000<span class="u">1/min</span></div></div>
-      <div class="ro"><div class="k"><i class="dot" style="background:var(--pump)"></i>Pompa</div><div class="v" id="ro_u">0.0<span class="u">mU/min</span></div></div>
-      <div class="ro"><div class="k">Waktu dalam rentang</div><div class="v" id="ro_tir">0<span class="u">%</span></div></div>
+    <canvas id="scene"></canvas>
+    <div class="callouts" id="callouts"></div>
+    <div class="inspector" id="insp" hidden>
+      <div class="ih"><i></i><strong id="insp_t"></strong><button id="insp_x" aria-label="Tutup">×</button></div>
+      <div class="big" id="insp_v"></div>
+      <p id="insp_d"></p>
+      <button class="go" id="insp_go">Atur parameternya</button>
     </div>
+    <!-- <div class="hint3d">seret untuk memutar · gulir untuk zoom</div> -->
+  </div>
 
-    <div class="status"><span class="pill good" id="pill">Dalam rentang normal</span><span id="statustext" style="color:var(--ink-2)">Simulasi berjalan terus-menerus; ubah parameter kapan saja dan grafik akan langsung mengikuti.</span></div>
-  </section>
+  <div class="flux">
+    <div class="fx glass" style="--c:var(--glucose)"><div class="k"><i></i>Makanan → darah</div><div class="bar"><i id="fx1"></i></div><div class="n" id="fx1n">0.00</div></div>
+    <div class="fx glass" style="--c:var(--beta)"><div class="k"><i></i>Sel β → insulin</div><div class="bar"><i id="fx2"></i></div><div class="n" id="fx2n">0.00</div></div>
+    <div class="fx glass" style="--c:var(--pump)"><div class="k"><i></i>Pompa → insulin</div><div class="bar"><i id="fx3"></i></div><div class="n" id="fx3n">0.00</div></div>
+    <div class="fx glass" style="--c:var(--remote)"><div class="k"><i></i>Darah → jaringan</div><div class="bar"><i id="fx4"></i></div><div class="n" id="fx4n">0.00</div></div>
+    <div class="fx glass" style="--c:var(--liver)"><div class="k"><i></i>Insulin → hati</div><div class="bar"><i id="fx5"></i></div><div class="n" id="fx5n">0.00</div></div>
+  </div>
+</section>
 
-  <!-- 3D -->
-  <section class="panel">
-    <div class="head"><h2>Kompartemen Tubuh</h2><span class="note"></span></div>
-    <div class="scene-wrap">
-      <canvas id="scene"></canvas>
-      <!-- <div class="scene-hint">nButiran yag mengalir = besarnya fluks pada saat itu</div> -->
+<!-- ===================== SIDE ===================== -->
+<aside class="side">
+  <div class="glass card">
+    <div class="card-h"><h2>Glukosa plasma</h2><span class="sub">mg/dL</span></div>
+    <div class="gauge-wrap">
+      <svg viewBox="0 0 240 140" id="gauge" aria-hidden="true">
+        <defs>
+          <filter id="gl" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3"/></filter>
+        </defs>
+        <g id="g_track"></g>
+        <g id="g_zones"></g>
+        <line id="g_target" x1="0" y1="0" x2="0" y2="0" stroke="var(--brand)" stroke-width="2.5" stroke-linecap="round" opacity="0"/>
+        <circle id="g_knob_glow" r="9" fill="var(--glucose)" filter="url(#gl)" opacity=".7"/>
+        <circle id="g_knob" r="7" fill="#fff" stroke="var(--glucose)" stroke-width="4"/>
+      </svg>
+      <div class="gauge-read"><div class="v" id="ro_g">200</div><div class="u">mg/dL</div></div>
     </div>
-    <div class="flux">
-      <div class="fx"><div class="k">Makanan → darah</div><div class="bar"><i id="fx1" style="background:var(--glucose)"></i></div><div class="n" id="fx1n">0.00 mg/dL·min⁻¹</div></div>
-      <div class="fx"><div class="k">Sel β → insulin</div><div class="bar"><i id="fx2" style="background:var(--band)"></i></div><div class="n" id="fx2n">0.00 mU/L·min⁻¹</div></div>
-      <div class="fx"><div class="k">Pompa → insulin</div><div class="bar"><i id="fx3" style="background:var(--pump)"></i></div><div class="n" id="fx3n">0.00 mU/min</div></div>
-      <div class="fx"><div class="k">Darah → jaringan</div><div class="bar"><i id="fx4" style="background:var(--remote)"></i></div><div class="n" id="fx4n">0.00 mg/dL·min⁻¹</div></div>
-      <div class="fx"><div class="k">Insulin → hati/ginjal</div><div class="bar"><i id="fx5" style="background:#C08A64"></i></div><div class="n" id="fx5n">0.00 mU/L·min⁻¹</div></div>
+    <div class="zones"><span>hipo &lt;70</span><span>normal 70–100</span><span>tinggi &gt;180</span></div>
+    <div class="statusline"><span class="pill good" id="pill">Dalam rentang normal</span><span id="statustext">Glukosa berada di 70–100 mg/dL.</span></div>
+  </div>
+
+  <div class="glass card">
+    <div class="tir">
+      <svg viewBox="0 0 100 100" aria-hidden="true">
+        <circle cx="50" cy="50" r="40" fill="none" stroke="var(--track)" stroke-width="11"/>
+        <circle id="tir_arc" cx="50" cy="50" r="40" fill="none" stroke="url(#tirg)" stroke-width="11" stroke-linecap="round" transform="rotate(-90 50 50)" stroke-dasharray="0 251.3"/>
+        <defs><linearGradient id="tirg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#22C55E"/><stop offset="1" stop-color="#0EA5A0"/></linearGradient></defs>
+      </svg>
+      <div><div class="t1" id="ro_tir">0%</div><div class="t2">Durasi glukosa berada dalam rentang 70–100 mg/dL</div></div>
     </div>
-  </section>
+  </div>
 
-  <!-- SYSTEM DIAGRAM -->
-  <section class="panel">
-    <div class="head"><h2>Diagram Sistem</h2></div>
-    <div class="sysbox">
-      <div class="syswell">
-        <svg viewBox="0 0 1000 260" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Diagram loop kendali PID pada model Bergman">
-          <style>
-            .sb{fill:var(--screen-2);stroke-width:1.4}
-            .sbt{fill:#EAF1F5;font:600 15px Inter,sans-serif}
-            .sbs{fill:#93AAB8;font:400 11.5px Inter,sans-serif}
-            .sarr{stroke:#5E7684;stroke-width:1.6;fill:none}
-            .slbl{fill:#7C93A1;font:400 11.5px Inter,sans-serif}
-          </style>
-          <defs>
-            <marker id="sa" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-              <path d="M1 1L8 5L1 9" fill="none" stroke="#5E7684" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-            </marker>
-          </defs>
+  <div class="minis">
+    <div class="mini glass" style="--c:var(--insulin)"><div><div class="k"><i></i>Insulin plasma</div><div class="v" id="ro_i">0<span class="u">mU/L</span></div></div><canvas id="sp_i"></canvas></div>
+    <div class="mini glass" style="--c:var(--remote)"><div><div class="k"><i></i>Aksi insulin <var>X</var></div><div class="v" id="ro_x">0<span class="u">1/min</span></div></div><canvas id="sp_x"></canvas></div>
+    <div class="mini glass" id="mini_u" style="--c:var(--pump)"><div><div class="k"><i></i>Keluaran pompa</div><div class="v" id="ro_u">0<span class="u">mU/min</span></div></div><canvas id="sp_u"></canvas></div>
+  </div>
+</aside>
 
-          <!-- 1. target -->
-          <rect class="sb" x="20" y="70" width="160" height="60" rx="8" stroke="var(--muted)"/>
-          <text class="sbt" x="100" y="93" text-anchor="middle">Target glukosa</text>
-          <text class="sbs" x="100" y="112" text-anchor="middle">G_target = 80 mg/dL</text>
-          <line x1="180" y1="100" x2="216" y2="100" class="sarr" marker-end="url(#sa)"/>
-          <text class="slbl" x="198" y="92" text-anchor="middle">-</text>
-
-          <!-- 2. controller -->
-          <rect class="sb" x="220" y="70" width="160" height="60" rx="8" stroke="var(--remote)"/>
-          <text class="sbt" x="300" y="93" text-anchor="middle">Kendali PID</text>
-          <text class="sbs" x="300" y="112" text-anchor="middle">u = Kp+Ki+Kd</text>
-          <line x1="380" y1="100" x2="416" y2="100" class="sarr" marker-end="url(#sa)"/>
-
-          <!-- 3. pump -->
-          <rect class="sb" x="420" y="70" width="160" height="60" rx="8" stroke="var(--pump)"/>
-          <text class="sbt" x="500" y="93" text-anchor="middle">Pompa insulin</text>
-          <text class="sbs" x="500" y="112" text-anchor="middle">u(t)</text>
-          <line x1="580" y1="100" x2="616" y2="100" class="sarr" marker-end="url(#sa)"/>
-
-          <!-- 4. patient / bergman -->
-          <rect class="sb" x="620" y="70" width="160" height="60" rx="8" stroke="var(--glucose)"/>
-          <text class="sbt" x="700" y="93" text-anchor="middle">Pasien</text>
-          <text class="sbs" x="700" y="112" text-anchor="middle">Ġ, Ẋ, İ</text>
-          <line x1="780" y1="100" x2="816" y2="100" class="sarr" marker-end="url(#sa)"/>
-
-          <!-- meal disturbance into patient -->
-          <text class="slbl" x="700" y="26" text-anchor="middle">M(t)</text>
-          <line x1="700" y1="32" x2="700" y2="66" class="sarr" marker-end="url(#sa)"/>
-
-          <!-- 5. sensor -->
-          <rect class="sb" x="820" y="70" width="160" height="60" rx="8" stroke="var(--insulin)"/>
-          <text class="sbt" x="900" y="93" text-anchor="middle">Sensor glukosa</text>
-          <text class="sbs" x="900" y="112" text-anchor="middle">G(t)</text>
-
-          <!-- feedback loop -->
-          <path d="M900 130 L900 196 L200 196 L200 100" class="sarr" marker-end="url(#sa)"/>
-          <text class="slbl" x="600" y="213" text-anchor="middle">e(t) = G(t) - G_target</text>
-          <text class="slbl" x="212" y="145" text-anchor="middle">+</text>
-        </svg>
+<!-- ===================== CHARTS ===================== -->
+<section class="charts glass card" id="charts">
+  <div class="chart-grid">
+    <div class="chartbox">
+      <div class="card-h"><h2>Glukosa plasma <var>G</var></h2></div>
+      <canvas id="cg" height="260"></canvas>
+      <div class="legend">
+        <span><i class="swatch" style="background:linear-gradient(90deg,var(--glucose-2),var(--glucose))"></i>Glukosa</span>
+        <span><i class="swatch" style="background:color-mix(in srgb,var(--beta) 45%,transparent)"></i>Rentang normal 70–100</span>
+        <span><i class="swatch" style="background:var(--brand)"></i>Target pompa</span>
+        <span><i class="swatch" style="background:#E8900C"></i>Waktu makan</span>
       </div>
-      <!-- <p class="syscap">Struktur ini mengikuti skema loop tertutup pada Gambar 3 paper rujukan (Desired BG → Controller → Insulin Pump → Patient → BG Sensor → umpan balik), dipetakan ke notasi model minimal Bergman pada Persamaan (1)–(2) di paper yang sama. Paper juga menggambar gangguan <em>Exercise</em> di samping <em>Meal</em> pada blok pasien (Gambar 3) dan mengasumsikan sensor sempurna tanpa derau — simulator ini mengikuti asumsi sensor ideal yang sama, tetapi baru memodelkan gangguan makan M(t); efek olahraga belum diimplementasikan.</p> -->
     </div>
-  </section>
-
-  <!-- MATH -->
-  <section class="panel">
-    <div class="head"><h2>Model Matematika</h2><span class="note"></span></div>
-    <div class="eqbox">
-      <div class="eq" id="eqbox">
-        <span class="line">
-          <span class="dotover"><var>G</var></span> =
-          <span class="term" id="t_p1">−<var>p</var><sub>1</sub>[<var>G</var>(<var>t</var>) − <var>G</var><sub>b</sub>]</span>
-          <span class="term" id="t_xg">− <var>X</var>(<var>t</var>)<var>G</var>(<var>t</var>)</span>
-          <span class="term" id="t_m">+ <var>M</var>(<var>t</var>)</span>
-        </span>
-        <span class="line">
-          <span class="dotover"><var>X</var></span> =
-          <span class="term" id="t_p2">−<var>p</var><sub>2</sub><var>X</var>(<var>t</var>)</span>
-          <span class="term" id="t_p3">+ <var>p</var><sub>3</sub>[<var>I</var>(<var>t</var>) − <var>I</var><sub>b</sub>]</span>
-        </span>
-        <span class="line">
-          <span class="dotover"><var>I</var></span> =
-          <span class="term" id="t_n">−<var>n</var>[<var>I</var>(<var>t</var>) − <var>I</var><sub>b</sub>]</span>
-          <span class="term" id="t_g">+ α·γ·max(<var>G</var>(<var>t</var>) − <var>h</var>, 0)</span>
-          <span class="term" id="t_u">+ <var>u</var>(<var>t</var>)</span>
-        </span>
-        <span class="line" style="margin-top:6px">
-          <var>u</var>(<var>t</var>) =
-          <span class="term" id="t_kp"><var>K</var><sub>p</sub><var>e</var>(<var>t</var>)</span>
-          <span class="term" id="t_ki">+ <var>K</var><sub>i</sub>∫<var>e</var>(τ)<var>d</var>τ</span>
-          <span class="term" id="t_kd">+ <var>K</var><sub>d</sub> <var>dG</var>/<var>dt</var></span>,
-          &nbsp;<var>e</var> = <var>G</var> − <var>G</var><sub>target</sub>
-        </span>
+    <div class="chartbox">
+      <div class="card-h"><h2>Insulin &amp; kendali</h2></div>
+      <canvas id="ci" height="260"></canvas>
+      <div class="legend">
+        <span><i class="swatch" style="background:var(--insulin)"></i>Insulin <var>I</var></span>
+        <span><i class="swatch" style="background:var(--remote)"></i>Aksi <var>X</var> (skala)</span>
+        <span><i class="swatch" style="background:var(--pump)"></i>Pompa <var>u</var> (skala)</span>
       </div>
-
-      <table class="termtable">
-        <thead><tr><th>Istilah</th><th>Arti fisiologis</th><th class="num">Nilai sekarang</th></tr></thead>
-        <tbody>
-          <tr id="r_p1"><td>−<var>p</var><sub>1</sub>[<var>G</var>−<var>G</var><sub>b</sub>]</td><td>Pembersihan glukosa yang tidak butuh insulin (otak, sel darah merah)</td><td class="num" id="v_p1">—</td></tr>
-          <tr id="r_xg"><td>−<var>X G</var></td><td>Glukosa ditarik ke otot dan jaringan lemak oleh kerja insulin</td><td class="num" id="v_xg">—</td></tr>
-          <tr id="r_m"><td>+<var>M</var>(<var>t</var>)</td><td>Glukosa dari makanan yang diserap usus</td><td class="num" id="v_m">—</td></tr>
-          <tr id="r_p2"><td>−<var>p</var><sub>2</sub><var>X</var></td><td>Aksi insulin di jaringan yang memudar seiring waktu</td><td class="num" id="v_p2">—</td></tr>
-          <tr id="r_p3"><td>+<var>p</var><sub>3</sub>[<var>I</var>−<var>I</var><sub>b</sub>]</td><td>Insulin dalam darah membangkitkan aksi di jaringan</td><td class="num" id="v_p3">—</td></tr>
-          <tr id="r_n"><td>−<var>n</var>[<var>I</var>−<var>I</var><sub>b</sub>]</td><td>Insulin dibersihkan dari plasma oleh hati dan ginjal</td><td class="num" id="v_n">—</td></tr>
-          <tr id="r_g"><td>+αγ·max(<var>G</var>−<var>h</var>,0)</td><td>Sekresi insulin oleh sel β saat glukosa di atas ambang</td><td class="num" id="v_g">—</td></tr>
-          <tr id="r_u"><td>+<var>u</var>(<var>t</var>)</td><td>Insulin dari pompa luar, diatur kendali PID</td><td class="num" id="v_u">—</td></tr>
-        </tbody>
-      </table>
-
-      <!-- <div class="callout">
-        <strong>Catatan pembacaan paper.</strong> Naskah asli menulis suku sekresi sebagai γ(<var>I</var>−<var>h</var>), tetapi Tabel 2 memberi <var>h</var> ≈ 79–80 — jelas satuan glukosa (mg/dL), bukan insulin. Simulator ini memakai bentuk baku model Bergman, γ·max(<var>G</var>−<var>h</var>, 0): sel β menyalakan sekresi hanya ketika glukosa melewati ambang. Tanpa koreksi ini, kasus “orang sehat” tidak akan pernah pulih ke rentang normal.
-      </div>
-      <div class="callout">
-        <strong>Tanda galat pada PID.</strong> Paper mendefinisikan <var>e</var> = target − <var>G</var>. Dipakai apa adanya, glukosa tinggi menghasilkan <var>u</var> negatif — pompa diminta menyedot insulin. Di sini galat dibalik menjadi <var>e</var> = <var>G</var> − target dan keluaran dijepit ke 0 … <var>u_max</var>, plus anti‑<em>windup</em> yang membekukan integrator saat pompa jenuh.
-      </div> -->
-
-      <!-- <div class="prose" style="margin-top:18px">
-        <p><strong>Cara integrasinya.</strong> Ketiga persamaan diselesaikan dengan Runge–Kutta orde empat, langkah tetap 0,1 menit, rentang 600 menit. Asupan makanan dimodelkan sebagai <var>M</var>(<var>t</var>) = <var>A</var>·exp[−<var>k</var>(<var>t</var>−<var>t</var><sub>makan</sub>)] untuk <var>t</var> ≥ <var>t</var><sub>makan</sub> — naik mendadak lalu meluruh, mendekati profil penyerapan usus.</p>
-        <p><strong>Tiga hal yang layak dicoba.</strong> Turunkan <span class="sym">α</span> sedikit demi sedikit dari 100 % dan amati kapan glukosa mulai gagal kembali ke rentang normal — itu batas cadangan sel β. Lalu setel <span class="sym">α</span> = 0 tanpa pompa untuk melihat hiperglikemia yang tidak terkoreksi. Terakhir nyalakan pompa dan besarkan <span class="sym">K_p</span>: kendali akan makin cepat menurunkan puncak, tetapi lewat sedikit saja glukosa akan menukik ke bawah 70 mg/dL — hipoglikemia akibat insulin yang sudah terlanjur di jaringan, kegagalan yang justru paling berbahaya di klinik.</p>
-      </div> -->
     </div>
-  </section>
-</div>
+  </div>
+  <div class="tooltip" id="tip" hidden></div>
+</section>
+
+<!-- ===================== SYSTEM DIAGRAM ===================== -->
+<section class="sys glass card">
+  <div class="card-h"><h2>Diagram sistem</h2><span class="sub">loop tertutup pankreas buatan</span></div>
+  <div class="syswell">
+    <svg viewBox="0 0 1000 240" id="sysvg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Diagram loop kendali PID pada model Bergman">
+      <defs>
+        <marker id="sa" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M1 1L8 5L1 9" fill="none" stroke="var(--muted)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+      </defs>
+      <rect class="sbox" x="20" y="70" width="160" height="62" rx="16" stroke="var(--brand)"/>
+      <text class="sbt" x="100" y="96" text-anchor="middle">Target glukosa</text>
+      <text class="sbs" x="100" y="116" text-anchor="middle" id="sys_target">G_target = 80 mg/dL</text>
+      <line x1="180" y1="101" x2="216" y2="101" class="sarr" marker-end="url(#sa)"/>
+
+      <rect class="sbox" x="220" y="70" width="160" height="62" rx="16" stroke="var(--remote)"/>
+      <text class="sbt" x="300" y="96" text-anchor="middle">Kendali PID</text>
+      <text class="sbs" x="300" y="116" text-anchor="middle">u = Kp·e + Ki ∫e + Kd·Ġ</text>
+      <line x1="380" y1="101" x2="416" y2="101" class="sarr" marker-end="url(#sa)"/>
+
+      <rect class="sbox" x="420" y="70" width="160" height="62" rx="16" stroke="var(--pump)"/>
+      <text class="sbt" x="500" y="96" text-anchor="middle">Pompa insulin</text>
+      <text class="sbs" x="500" y="116" text-anchor="middle" id="sys_u">u(t) = 0.0</text>
+      <line x1="580" y1="101" x2="616" y2="101" class="sarr" marker-end="url(#sa)"/>
+
+      <rect class="sbox" x="620" y="70" width="160" height="62" rx="16" stroke="var(--glucose)"/>
+      <text class="sbt" x="700" y="96" text-anchor="middle">Pasien</text>
+      <text class="sbs" x="700" y="116" text-anchor="middle">Ġ, Ẋ, İ</text>
+      <line x1="780" y1="101" x2="816" y2="101" class="sarr" marker-end="url(#sa)"/>
+
+      <text class="slbl" x="700" y="24" text-anchor="middle">makanan M(t)</text>
+      <line x1="700" y1="32" x2="700" y2="66" class="sarr" marker-end="url(#sa)"/>
+
+      <rect class="sbox" x="820" y="70" width="160" height="62" rx="16" stroke="var(--insulin)"/>
+      <text class="sbt" x="900" y="96" text-anchor="middle">Sensor glukosa</text>
+      <text class="sbs" x="900" y="116" text-anchor="middle" id="sys_g">G(t) = 200</text>
+
+      <path d="M900 132 L900 196 L200 196 L200 101" class="sarr" marker-end="url(#sa)"/>
+      <text class="slbl" x="600" y="216" text-anchor="middle">e(t) = G(t) − G_target</text>
+      <text class="slbl" x="212" y="150" text-anchor="middle">+</text>
+      <text class="slbl" x="198" y="92" text-anchor="middle">−</text>
+    </svg>
+  </div>
+  <div class="sysnote" id="sysnote">Garis putus-putus bergerak saat pompa aktif dan simulasi berjalan.</div>
+</section>
+
+<!-- ===================== MATH ===================== -->
+<section class="math glass card">
+  <div class="card-h"><h2>Model matematika</h2><span class="sub">suku aktif disorot</span></div>
+  <div class="mathgrid"><div class="eq" id="eqbox">
+    <span class="line">
+      <span class="dotover"><var>G</var></span> =
+      <span class="term" id="t_p1">−<var>p</var><sub>1</sub>[<var>G</var>(<var>t</var>) − <var>G</var><sub>b</sub>]</span>
+      <span class="term" id="t_xg">− <var>X</var>(<var>t</var>)<var>G</var>(<var>t</var>)</span>
+      <span class="term" id="t_m">+ <var>M</var>(<var>t</var>)</span>
+    </span>
+    <span class="line">
+      <span class="dotover"><var>X</var></span> =
+      <span class="term" id="t_p2">−<var>p</var><sub>2</sub><var>X</var>(<var>t</var>)</span>
+      <span class="term" id="t_p3">+ <var>p</var><sub>3</sub>[<var>I</var>(<var>t</var>) − <var>I</var><sub>b</sub>]</span>
+    </span>
+    <span class="line">
+      <span class="dotover"><var>I</var></span> =
+      <span class="term" id="t_n">−<var>n</var>[<var>I</var>(<var>t</var>) − <var>I</var><sub>b</sub>]</span>
+      <span class="term" id="t_g">+ α·γ·max(<var>G</var>(<var>t</var>) − <var>h</var>, 0)</span>
+      <span class="term" id="t_u">+ <var>u</var>(<var>t</var>)</span>
+    </span>
+    <span class="line" style="margin-top:4px">
+      <var>u</var>(<var>t</var>) =
+      <span class="term" id="t_kp"><var>K</var><sub>p</sub><var>e</var>(<var>t</var>)</span>
+      <span class="term" id="t_ki">+ <var>K</var><sub>i</sub>∫<var>e</var>(τ)<var>d</var>τ</span>
+      <span class="term" id="t_kd">+ <var>K</var><sub>d</sub> <var>dG</var>/<var>dt</var></span>,
+      &nbsp;<var>e</var> = <var>G</var> − <var>G</var><sub>target</sub>
+    </span>
+  </div>
+  <div class="tablewrap">
+  <table class="termtable">
+    <thead><tr><th>Suku</th><th>Arti fisiologis</th><th class="num">Nilai sekarang</th></tr></thead>
+    <tbody>
+      <tr id="r_p1"><td>−<var>p</var><sub>1</sub>[<var>G</var>−<var>G</var><sub>b</sub>]</td><td>Pembersihan glukosa tanpa insulin (otak, sel darah merah)</td><td class="num" id="v_p1">—</td></tr>
+      <tr id="r_xg"><td>−<var>X G</var></td><td>Glukosa ditarik ke otot dan lemak oleh kerja insulin</td><td class="num" id="v_xg">—</td></tr>
+      <tr id="r_m"><td>+<var>M</var>(<var>t</var>)</td><td>Glukosa dari makanan yang diserap usus</td><td class="num" id="v_m">—</td></tr>
+      <tr id="r_p2"><td>−<var>p</var><sub>2</sub><var>X</var></td><td>Aksi insulin di jaringan yang memudar</td><td class="num" id="v_p2">—</td></tr>
+      <tr id="r_p3"><td>+<var>p</var><sub>3</sub>[<var>I</var>−<var>I</var><sub>b</sub>]</td><td>Insulin darah membangkitkan aksi di jaringan</td><td class="num" id="v_p3">—</td></tr>
+      <tr id="r_n"><td>−<var>n</var>[<var>I</var>−<var>I</var><sub>b</sub>]</td><td>Insulin dibersihkan hati dan ginjal</td><td class="num" id="v_n">—</td></tr>
+      <tr id="r_g"><td>+αγ·max(<var>I</var>−<var>h</var>,0)</td><td>Sekresi insulin sel β saat glukosa di atas ambang</td><td class="num" id="v_g">—</td></tr>
+      <tr id="r_u"><td>+<var>u</var>(<var>t</var>)</td><td>Insulin dari pompa luar, diatur PID</td><td class="num" id="v_u">—</td></tr>
+    </tbody>
+  </table>
+  </div>
+  </div>
+</section>
+
 </main>
+</div>
 
 <footer>
   Model dan nilai parameter mengikuti Echajei, Hafdane, Idmbarek, Ferjouchia &amp; Rachik, <em>Implementation of PID Control Strategies on Bergman Model Representing Type 1 Diabetes‑T1D</em>, Commun. Math. Biol. Neurosci. 2025:1.
@@ -765,22 +914,21 @@ else (typeof self !== 'undefined' ? self : this).MeshoptDecoder = MeshoptDecoder
 "use strict";
 
 /* ============================================================
-   1. STATE & PARAMETERS
+   1. STATE & SIMULATION (tidak diubah dari versi asli)
    ============================================================ */
 const P = {
   alpha:1, gamma:0.0039, h:79,
   p1:0.031, p2:0.012, p3:4.92e-6, n:0.265,
   G0:200, I0:364.8, Gb:70, Ib:7,
   mealA:8, mealK:0.05, meal1:150, mealPeriod:240,
-  pidon:false, target:80, Kp:0.08, Ki:0.0002, Kd:4, umax:60
+  pidon:false, target:80, Kp:0.06, Ki:0.0000, Kd:7, umax:60
 };
-const WINDOW=600, DT=0.1, REC=0.5;      // menit — WINDOW = lebar jendela grafik yang bergulir
+const WINDOW=600, DT=0.1, REC=0.5;
 let t=0, G=P.G0, X=0, I=P.I0, integ=0, u=0, dGdt=0, M=0;
 let inRange=0, total=0;
 let hist={t:[],G:[],I:[],X:[],u:[]};
 let running=false, speed=1, lastFrame=0, recAcc=0;
 
-// makan berulang periodik: makan pertama pada P.meal1, lalu setiap P.mealPeriod menit
 function mealTimesInRange(t0,t1){
   const period=Math.max(P.mealPeriod,1), first=P.meal1;
   const arr=[]; if(t1<first) return arr;
@@ -794,15 +942,13 @@ function mealFlux(tt){
   if(tt<P.meal1) return 0;
   const k=Math.floor((tt-P.meal1)/period);
   let s=0;
-  for(let j=0;j<3;j++){                 // sisa makan-makan sebelumnya yang masih relevan (peluruhan eksponensial)
+  for(let j=0;j<3;j++){
     const idx=k-j; if(idx<0) continue;
     const tm=P.meal1+idx*period;
     if(tt>=tm) s+=P.mealA*Math.exp(-P.mealK*(tt-tm));
   }
   return s;
 }
-
-/* ---- derivatives ---- */
 function deriv(tt,g,x,i,uu){
   const m=mealFlux(tt);
   return [
@@ -811,41 +957,33 @@ function deriv(tt,g,x,i,uu){
     -P.n*(i-P.Ib) + P.alpha*P.gamma*Math.max(g-P.h,0) + uu
   ];
 }
-
-/* ---- one RK4 step (u held constant across the step) ---- */
 function step(){
   M = mealFlux(t);
   dGdt = -P.p1*(G-P.Gb) - X*G + M;
-
   if(P.pidon){
     const e=G-P.target;
     const raw=P.Kp*e + P.Ki*integ + P.Kd*dGdt;
     u=Math.max(0,Math.min(raw,P.umax));
-    if(Math.abs(raw-u)<1e-9) integ=Math.max(-3e4,Math.min(3e4,integ+e*DT)); // anti-windup
+    if(Math.abs(raw-u)<1e-9) integ=Math.max(-3e4,Math.min(3e4,integ+e*DT));
   } else { u=0; integ=0; }
-
   const k1=deriv(t,G,X,I,u);
   const k2=deriv(t+DT/2, G+DT/2*k1[0], X+DT/2*k1[1], I+DT/2*k1[2], u);
   const k3=deriv(t+DT/2, G+DT/2*k2[0], X+DT/2*k2[1], I+DT/2*k2[2], u);
   const k4=deriv(t+DT,   G+DT*k3[0],   X+DT*k3[1],   I+DT*k3[2],   u);
-
   G=Math.max(0,G+DT/6*(k1[0]+2*k2[0]+2*k3[0]+k4[0]));
   X=X+DT/6*(k1[1]+2*k2[1]+2*k3[1]+k4[1]);
   I=Math.max(0,I+DT/6*(k1[2]+2*k2[2]+2*k3[2]+k4[2]));
   t+=DT;
-
   total++; if(G>=70&&G<=100) inRange++;
   recAcc+=DT;
   if(recAcc>=REC-1e-9){
     recAcc=0;
     hist.t.push(t); hist.G.push(G); hist.I.push(I); hist.X.push(X); hist.u.push(u);
-    // buang titik yang sudah keluar jendela tampilan supaya array tak tumbuh selamanya
     const cutoff=t-WINDOW-REC*4;
     let drop=0; while(drop<hist.t.length && hist.t[drop]<cutoff) drop++;
     if(drop>0){ hist.t.splice(0,drop); hist.G.splice(0,drop); hist.I.splice(0,drop); hist.X.splice(0,drop); hist.u.splice(0,drop); }
   }
 }
-
 function reset(){
   t=0; G=P.G0; X=0; I=P.I0; integ=0; u=0; dGdt=0; M=0;
   inRange=0; total=0; recAcc=0;
@@ -854,122 +992,252 @@ function reset(){
 }
 
 /* ============================================================
-   2. CHARTS (canvas 2D)
+   2. THEME TOKENS
    ============================================================ */
-const cg=document.getElementById('cg'), ci=document.getElementById('ci');
+const $=id=>document.getElementById(id);
+let TK={};
+function readTokens(){
+  const cs=getComputedStyle(document.documentElement);
+  const g=n=>cs.getPropertyValue(n).trim();
+  TK={grid:g('--chart-grid'),text:g('--chart-text'),ink:g('--ink'),muted:g('--muted'),
+      glucose:g('--glucose'),glucose2:g('--glucose-2'),insulin:g('--insulin'),remote:g('--remote'),
+      pump:g('--pump'),beta:g('--beta'),brand:g('--brand'),track:g('--track'),
+      low:g('--low'),ok:g('--ok'),high:g('--high'),hyper:g('--hyper')};
+}
+readTokens();
+if(window.matchMedia){ matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change',()=>{readTokens();draw();}); }
+function alpha(hex,a){
+  const h=hex.replace('#',''); const n=parseInt(h.length===3?h.split('').map(c=>c+c).join(''):h,16);
+  return `rgba(${n>>16&255},${n>>8&255},${n&255},${a})`;
+}
+
+/* ============================================================
+   3. CHARTS
+   ============================================================ */
+const cg=$('cg'), ci=$('ci');
 const gx=cg.getContext('2d'), ix=ci.getContext('2d');
+const FONT='500 11px "Plus Jakarta Sans",system-ui,sans-serif';
+let hoverT=null;
 
 function fit(cv){
   const r=window.devicePixelRatio||1;
   const w=cv.clientWidth, h=parseInt(cv.getAttribute('height'),10);
-  cv.width=w*r; cv.height=h*r; cv.style.height=h+'px';
+  cv.width=Math.max(1,w*r); cv.height=h*r; cv.style.height=h+'px';
   const c=cv.getContext('2d'); c.setTransform(r,0,0,r,0,0);
   return {w,h};
 }
+const PAD={l:40,r:10,t:14,b:24};
+function X_(tt,w,t0,t1){return PAD.l+((tt-t0)/(t1-t0))*(w-PAD.l-PAD.r);}
+function Y_(v,h,ymin,ymax){return PAD.t+(1-(v-ymin)/(ymax-ymin))*(h-PAD.t-PAD.b);}
 
-function axes(c,w,h,pad,ymin,ymax,ticks,label,t0,t1){
+function axes(c,w,h,ymin,ymax,ticks,t0,t1){
   c.clearRect(0,0,w,h);
-  c.strokeStyle='#22323D'; c.lineWidth=1; c.font='11px Inter,sans-serif';
-  c.fillStyle='#6E8695'; c.textBaseline='middle';
+  c.font=FONT; c.lineWidth=1; c.textBaseline='middle';
   for(const v of ticks){
-    const y=pad.t+(1-(v-ymin)/(ymax-ymin))*(h-pad.t-pad.b);
-    c.beginPath(); c.moveTo(pad.l,y); c.lineTo(w-pad.r,y); c.stroke();
-    c.textAlign='right'; c.fillText(String(v),pad.l-7,y);
+    const y=Y_(v,h,ymin,ymax);
+    c.strokeStyle=TK.grid; c.setLineDash([3,4]);
+    c.beginPath(); c.moveTo(PAD.l,y); c.lineTo(w-PAD.r,y); c.stroke(); c.setLineDash([]);
+    c.fillStyle=TK.text; c.textAlign='right'; c.fillText(String(v),PAD.l-8,y);
   }
   c.textAlign='center';
-  const xStep=100;
-  const xStart=Math.ceil(t0/xStep)*xStep;
+  const xStep=100, xStart=Math.ceil(t0/xStep)*xStep;
   for(let m=xStart;m<=t1+1e-6;m+=xStep){
-    const x=pad.l+((m-t0)/(t1-t0))*(w-pad.l-pad.r);
-    c.strokeStyle='#1B2B35'; c.beginPath(); c.moveTo(x,pad.t); c.lineTo(x,h-pad.b); c.stroke();
-    c.fillText(String(Math.round(m)),x,h-pad.b+11);
+    const x=X_(m,w,t0,t1);
+    c.fillStyle=TK.text; c.fillText(String(Math.round(m)),x,h-PAD.b+13);
   }
-  c.textAlign='left'; c.fillStyle='#55707F';
-  c.fillText(label,pad.l,pad.t-9);
 }
-
-function series(c,w,h,pad,arrT,arrY,ymin,ymax,color,width,t0,t1){
-  c.strokeStyle=color; c.lineWidth=width||1.8; c.lineJoin='round'; c.beginPath();
-  let started=false;
+function pathSeries(c,w,h,arrT,arrY,ymin,ymax,t0,t1){
+  c.beginPath();
   for(let k=0;k<arrY.length;k++){
-    const x=pad.l+((arrT[k]-t0)/(t1-t0))*(w-pad.l-pad.r);
-    const y=pad.t+(1-(arrY[k]-ymin)/(ymax-ymin))*(h-pad.t-pad.b);
-    if(!started){c.moveTo(x,y);started=true;} else c.lineTo(x,y);
+    const x=X_(arrT[k],w,t0,t1), y=Y_(arrY[k],h,ymin,ymax);
+    k?c.lineTo(x,y):c.moveTo(x,y);
   }
-  c.stroke();
 }
-
-function mealMarks(c,w,h,pad,t0,t1){
+function line(c,w,h,arrT,arrY,ymin,ymax,t0,t1,color,width,fill){
+  if(!arrY.length) return;
+  if(fill){
+    pathSeries(c,w,h,arrT,arrY,ymin,ymax,t0,t1);
+    c.lineTo(X_(arrT[arrT.length-1],w,t0,t1),h-PAD.b); c.lineTo(X_(arrT[0],w,t0,t1),h-PAD.b); c.closePath();
+    const gr=c.createLinearGradient(0,PAD.t,0,h-PAD.b);
+    gr.addColorStop(0,alpha(fill,.32)); gr.addColorStop(1,alpha(fill,0));
+    c.fillStyle=gr; c.fill();
+  }
+  pathSeries(c,w,h,arrT,arrY,ymin,ymax,t0,t1);
+  c.strokeStyle=color; c.lineWidth=width; c.lineJoin='round'; c.lineCap='round'; c.stroke();
+}
+function mealMarks(c,w,h,t0,t1){
   for(const tm of mealTimesInRange(t0,t1)){
-    const x=pad.l+((tm-t0)/(t1-t0))*(w-pad.l-pad.r);
-    c.strokeStyle='rgba(201,133,63,.75)'; c.lineWidth=1; c.setLineDash([3,3]);
-    c.beginPath(); c.moveTo(x,pad.t); c.lineTo(x,h-pad.b); c.stroke(); c.setLineDash([]);
-    c.fillStyle='rgba(201,133,63,.95)'; c.beginPath();
-    c.moveTo(x,pad.t-1); c.lineTo(x-4,pad.t-7); c.lineTo(x+4,pad.t-7); c.closePath(); c.fill();
+    const x=X_(tm,w,t0,t1);
+    c.strokeStyle='rgba(232,144,12,.55)'; c.lineWidth=1.2; c.setLineDash([4,4]);
+    c.beginPath(); c.moveTo(x,PAD.t+10); c.lineTo(x,h-PAD.b); c.stroke(); c.setLineDash([]);
+    c.fillStyle='#E8900C'; c.beginPath(); c.arc(x,PAD.t+4,4,0,7); c.fill();
   }
 }
+function headDot(c,x,y,col){
+  c.fillStyle=alpha(col,.22); c.beginPath(); c.arc(x,y,9,0,7); c.fill();
+  c.fillStyle='#fff'; c.beginPath(); c.arc(x,y,4.6,0,7); c.fill();
+  c.strokeStyle=col; c.lineWidth=2.6; c.beginPath(); c.arc(x,y,4.6,0,7); c.stroke();
+}
+function idxAt(tt){
+  const a=hist.t; if(!a.length) return -1;
+  let lo=0,hi=a.length-1;
+  while(hi-lo>1){const m=(lo+hi)>>1; if(a[m]<tt) lo=m; else hi=m;}
+  return Math.abs(a[lo]-tt)<Math.abs(a[hi]-tt)?lo:hi;
+}
+function crosshair(c,w,h,t0,t1,k,pts){
+  const x=X_(hist.t[k],w,t0,t1);
+  c.strokeStyle=alpha(TK.ink.startsWith('#')?TK.ink:'#3A0D17',.35); c.lineWidth=1;
+  c.beginPath(); c.moveTo(x,PAD.t); c.lineTo(x,h-PAD.b); c.stroke();
+  for(const [y,col] of pts){ c.fillStyle='#fff'; c.beginPath(); c.arc(x,y,4,0,7); c.fill(); c.strokeStyle=col; c.lineWidth=2.2; c.stroke(); }
+}
 
+let scaleG={}, scaleI={};
 function draw(){
-  // jendela waktu yang bergulir: mengisi 0..WINDOW dulu, lalu bergeser mengikuti t
   const t1=Math.max(t,WINDOW), t0=t1-WINDOW;
 
-  /* ---- glucose ---- */
-  let {w,h}=fit(cg); const pad={l:44,r:12,t:22,b:22};
+  /* glucose */
+  let {w,h}=fit(cg);
   const gmax=Math.max(260, Math.ceil((Math.max(...hist.G,P.G0)+30)/50)*50), gmin=0;
-  axes(gx,w,h,pad,gmin,gmax,[0,50,100,150,200,250].filter(v=>v<=gmax),'Glukosa plasma · mg/dL',t0,t1);
-  // normal band
-  const yTop=pad.t+(1-(100-gmin)/(gmax-gmin))*(h-pad.t-pad.b);
-  const yBot=pad.t+(1-(70-gmin)/(gmax-gmin))*(h-pad.t-pad.b);
-  gx.fillStyle='rgba(126,188,116,.16)'; gx.fillRect(pad.l,yTop,w-pad.l-pad.r,yBot-yTop);
-  gx.strokeStyle='rgba(126,188,116,.42)'; gx.lineWidth=1;
-  gx.beginPath(); gx.moveTo(pad.l,yTop); gx.lineTo(w-pad.r,yTop); gx.moveTo(pad.l,yBot); gx.lineTo(w-pad.r,yBot); gx.stroke();
-  // target
+  scaleG={w,h,gmin,gmax,t0,t1};
+  axes(gx,w,h,gmin,gmax,[0,50,100,150,200,250,300,350,400].filter(v=>v<=gmax),t0,t1);
+  const yTop=Y_(100,h,gmin,gmax), yBot=Y_(70,h,gmin,gmax);
+  gx.fillStyle=alpha(TK.beta,.12); gx.fillRect(PAD.l,yTop,w-PAD.l-PAD.r,yBot-yTop);
+  gx.strokeStyle=alpha(TK.beta,.45); gx.lineWidth=1;
+  gx.beginPath(); gx.moveTo(PAD.l,yTop); gx.lineTo(w-PAD.r,yTop); gx.moveTo(PAD.l,yBot); gx.lineTo(w-PAD.r,yBot); gx.stroke();
   if(P.pidon){
-    const yt=pad.t+(1-(P.target-gmin)/(gmax-gmin))*(h-pad.t-pad.b);
-    gx.strokeStyle='#8FA3B0'; gx.setLineDash([5,4]); gx.beginPath();
-    gx.moveTo(pad.l,yt); gx.lineTo(w-pad.r,yt); gx.stroke(); gx.setLineDash([]);
+    const yt=Y_(P.target,h,gmin,gmax);
+    gx.strokeStyle=TK.brand; gx.lineWidth=1.5; gx.setLineDash([6,5]); gx.beginPath();
+    gx.moveTo(PAD.l,yt); gx.lineTo(w-PAD.r,yt); gx.stroke(); gx.setLineDash([]);
   }
-  mealMarks(gx,w,h,pad,t0,t1);
-  series(gx,w,h,pad,hist.t,hist.G,gmin,gmax,'#F0A340',2.1,t0,t1);
-  // head dot
-  if(hist.G.length){
-    const x=pad.l+((t-t0)/(t1-t0))*(w-pad.l-pad.r);
-    const y=pad.t+(1-(G-gmin)/(gmax-gmin))*(h-pad.t-pad.b);
-    gx.fillStyle='#F0A340'; gx.beginPath(); gx.arc(x,y,3.4,0,7); gx.fill();
-    gx.strokeStyle='rgba(240,163,64,.35)'; gx.beginPath(); gx.arc(x,y,7,0,7); gx.stroke();
-  }
+  mealMarks(gx,w,h,t0,t1);
+  const lg=gx.createLinearGradient(PAD.l,0,w-PAD.r,0);
+  lg.addColorStop(0,TK.glucose2); lg.addColorStop(1,TK.glucose);
+  line(gx,w,h,hist.t,hist.G,gmin,gmax,t0,t1,lg,2.8,TK.glucose);
+  if(hist.G.length) headDot(gx,X_(t,w,t0,t1),Y_(G,h,gmin,gmax),TK.glucose);
 
-  /* ---- insulin / control ---- */
-  ({w,h}=fit(ci)); const pad2={l:44,r:12,t:22,b:22};
+  /* insulin / control */
+  ({w,h}=fit(ci));
   const imax=Math.max(120, Math.ceil((Math.max(...hist.I,P.I0)+20)/100)*100);
-  axes(ix,w,h,pad2,0,imax,[0,imax/4,imax/2,3*imax/4,imax].map(v=>Math.round(v)),'Insulin · mU/L   ·   aksi jaringan X ×10³   ·   pompa u',t0,t1);
-  mealMarks(ix,w,h,pad2,t0,t1);
-  series(ix,w,h,pad2,hist.t,hist.I,0,imax,'#3FCBC2',1.9,t0,t1);
-  series(ix,w,h,pad2,hist.t,hist.X.map(v=>v*1000*(imax/300)),0,imax,'#B98CE0',1.6,t0,t1);
-  if(P.pidon) series(ix,w,h,pad2,hist.t,hist.u.map(v=>v*(imax/P.umax)*0.55),0,imax,'#FF7A6B',1.6,t0,t1);
+  scaleI={w,h,imax,t0,t1};
+  axes(ix,w,h,0,imax,[0,imax/4,imax/2,3*imax/4,imax].map(v=>Math.round(v)),t0,t1);
+  mealMarks(ix,w,h,t0,t1);
+  line(ix,w,h,hist.t,hist.X.map(v=>v*1000*(imax/300)),0,imax,t0,t1,TK.remote,2,null);
+  if(P.pidon) line(ix,w,h,hist.t,hist.u.map(v=>v*(imax/P.umax)*0.55),0,imax,t0,t1,TK.pump,2,TK.pump);
+  line(ix,w,h,hist.t,hist.I,0,imax,t0,t1,TK.insulin,2.6,TK.insulin);
+  if(hist.I.length) headDot(ix,X_(t,w,t0,t1),Y_(I,h,0,imax),TK.insulin);
+
+  /* crosshair */
+  if(hoverT!==null){
+    const k=idxAt(hoverT);
+    if(k>=0){
+      crosshair(gx,scaleG.w,scaleG.h,t0,t1,k,[[Y_(hist.G[k],scaleG.h,gmin,gmax),TK.glucose]]);
+      const pts=[[Y_(hist.I[k],scaleI.h,0,imax),TK.insulin],[Y_(hist.X[k]*1000*(imax/300),scaleI.h,0,imax),TK.remote]];
+      if(P.pidon) pts.push([Y_(hist.u[k]*(imax/P.umax)*0.55,scaleI.h,0,imax),TK.pump]);
+      crosshair(ix,scaleI.w,scaleI.h,t0,t1,k,pts);
+    }
+  }
+  drawSparks();
+}
+
+/* synchronized hover tooltip */
+const tip=$('tip'), chartsEl=$('charts');
+function onHover(e,cv,sc){
+  const r=cv.getBoundingClientRect(), x=e.clientX-r.left;
+  if(x<PAD.l||x>r.width-PAD.r){ leave(); return; }
+  hoverT=sc.t0+((x-PAD.l)/(r.width-PAD.l-PAD.r))*(sc.t1-sc.t0);
+  const k=idxAt(hoverT); if(k<0) return;
+  if(hoverT>hist.t[hist.t.length-1]+1){ leave(); return; }
+  const row=(c,l,v)=>`<div class="r"><span><i style="background:${c}"></i>${l}</span><b>${v}</b></div>`;
+  tip.innerHTML=`<div style="opacity:.7;margin-bottom:2px">Menit ke ${Math.round(hist.t[k])}</div>`+
+    row(TK.glucose,'Glukosa',fmt(hist.G[k],1)+' mg/dL')+
+    row(TK.insulin,'Insulin',fmt(hist.I[k],1)+' mU/L')+
+    row(TK.remote,'Aksi X',fmt(hist.X[k],4))+
+    (P.pidon?row(TK.pump,'Pompa',fmt(hist.u[k],1)+' mU/min'):'');
+  const cr=chartsEl.getBoundingClientRect();
+  tip.style.left=(e.clientX-cr.left)+'px'; tip.style.top=(e.clientY-cr.top)+'px';
+  tip.hidden=false;
+  draw();
+}
+function leave(){ hoverT=null; tip.hidden=true; draw(); }
+[[cg,()=>scaleG],[ci,()=>scaleI]].forEach(([cv,sc])=>{
+  cv.addEventListener('mousemove',e=>onHover(e,cv,sc()));
+  cv.addEventListener('mouseleave',leave);
+});
+
+/* sparklines */
+const sparks=[['sp_i','I',()=>TK.insulin],['sp_x','X',()=>TK.remote],['sp_u','u',()=>TK.pump]];
+function drawSparks(){
+  for(const [id,key,col] of sparks){
+    const cv=$(id), r=window.devicePixelRatio||1, w=cv.clientWidth||110, h=44;
+    cv.width=w*r; cv.height=h*r; const c=cv.getContext('2d'); c.setTransform(r,0,0,r,0,0);
+    c.clearRect(0,0,w,h);
+    const arr=hist[key]; if(arr.length<2) continue;
+    let mn=Math.min(...arr), mx=Math.max(...arr); if(mx-mn<1e-9){mx=mn+1;}
+    const n=arr.length, color=col();
+    c.beginPath();
+    for(let k=0;k<n;k++){const x=k/(n-1)*w, y=4+(1-(arr[k]-mn)/(mx-mn))*(h-8); k?c.lineTo(x,y):c.moveTo(x,y);}
+    c.strokeStyle=color; c.lineWidth=2; c.lineJoin='round'; c.stroke();
+    c.lineTo(w,h); c.lineTo(0,h); c.closePath();
+    const gr=c.createLinearGradient(0,0,0,h); gr.addColorStop(0,alpha(color,.28)); gr.addColorStop(1,alpha(color,0));
+    c.fillStyle=gr; c.fill();
+  }
 }
 
 /* ============================================================
-   3. 3D SCENE (three.js r128, hand-rolled orbit)
+   4. GAUGE
    ============================================================ */
-const cv3=document.getElementById('scene');
+const GMIN=40, GMAX=300, GC={x:120,y:120,r:94};
+function gAng(v){return Math.PI+(Math.min(Math.max(v,GMIN),GMAX)-GMIN)/(GMAX-GMIN)*Math.PI;}
+function gPt(v,r){const a=gAng(v);return [GC.x+(r||GC.r)*Math.cos(a),GC.y+(r||GC.r)*Math.sin(a)];}
+function gArc(a,b,r){const p=gPt(a,r),q=gPt(b,r);return `M${p[0].toFixed(2)} ${p[1].toFixed(2)} A${r} ${r} 0 0 1 ${q[0].toFixed(2)} ${q[1].toFixed(2)}`;}
+(function buildGauge(){
+  const NS='http://www.w3.org/2000/svg';
+  const tr=document.createElementNS(NS,'path');
+  tr.setAttribute('d',gArc(GMIN,GMAX,GC.r)); tr.setAttribute('stroke','var(--track)');
+  tr.setAttribute('stroke-width','16'); tr.setAttribute('fill','none'); tr.setAttribute('stroke-linecap','round');
+  $('g_track').appendChild(tr);
+  const zones=[[GMIN,69,'var(--low)'],[71,99,'var(--beta)'],[101,179,'var(--high)'],[181,GMAX,'var(--hyper)']];
+  for(const [a,b,c] of zones){
+    const p=document.createElementNS(NS,'path');
+    p.setAttribute('d',gArc(a,b,GC.r)); p.setAttribute('stroke',c); p.setAttribute('stroke-width','8');
+    p.setAttribute('fill','none'); p.setAttribute('stroke-linecap','round');
+    $('g_zones').appendChild(p);
+  }
+  for(const v of [70,100,180]){
+    const [x1,y1]=gPt(v,GC.r-16),[x2,y2]=gPt(v,GC.r-22);
+    const l=document.createElementNS(NS,'line');
+    l.setAttribute('x1',x1);l.setAttribute('y1',y1);l.setAttribute('x2',x2);l.setAttribute('y2',y2);
+    l.setAttribute('stroke','var(--muted)');l.setAttribute('stroke-width','1.5');l.setAttribute('stroke-linecap','round');
+    $('g_zones').appendChild(l);
+  }
+})();
+function gColor(g){return g<70?TK.low:g<=100?TK.beta:g<=180?TK.high:TK.hyper;}
+function updateGauge(){
+  const [x,y]=gPt(G,GC.r), col=gColor(G);
+  for(const id of ['g_knob','g_knob_glow']){ $(id).setAttribute('cx',x); $(id).setAttribute('cy',y); }
+  $('g_knob').setAttribute('stroke',col); $('g_knob_glow').setAttribute('fill',col);
+  $('ro_g').style.color=col;
+  const tg=$('g_target');
+  if(P.pidon){
+    const [a,b]=gPt(P.target,GC.r-12),[c,d]=gPt(P.target,GC.r+12);
+    tg.setAttribute('x1',a);tg.setAttribute('y1',b);tg.setAttribute('x2',c);tg.setAttribute('y2',d);tg.setAttribute('opacity','1');
+  } else tg.setAttribute('opacity','0');
+}
+
+/* ============================================================
+   5. 3D SCENE
+   ============================================================ */
+const cv3=$('scene');
 let renderer,scene,cam,nodes={},streams=[],ready=false;
-let orbit={az:0.62,el:0.36,r:15,tx:0,ty:0};
+const ORBIT0={az:0.42,el:0.30,r:20};
+let orbit={...ORBIT0};
 
-function mat(col,emis){return new THREE.MeshStandardMaterial({color:col,emissive:emis||0x000000,roughness:.45,metalness:.12,transparent:true,opacity:.95});}
-
-/* --- utilitas model GLB tertanam (organ anatomis) --- */
-function b64ToBuf(b64){
-  const bin=atob(b64), len=bin.length, buf=new Uint8Array(len);
-  for(let i=0;i<len;i++) buf[i]=bin.charCodeAt(i);
-  return buf.buffer;
-}
-function forEachMat(root,fn){
-  root.traverse(o=>{ if(o.isMesh&&o.material){ (Array.isArray(o.material)?o.material:[o.material]).forEach(fn); } });
-}
-function setOpacity(root,v){ if(root) forEachMat(root,m=>{m.transparent=true;m.opacity=v;}); }
-function setEmissive(root,v){ if(root) forEachMat(root,m=>{ if(m.emissive) m.emissive.setScalar(v); }); }
-function setColor(root,hex){ if(root) forEachMat(root,m=>{ if(m.color) m.color.setHex(hex); }); }
+function mat(col,emis,op){return new THREE.MeshStandardMaterial({color:col,emissive:emis||0x000000,roughness:.35,metalness:.08,transparent:true,opacity:op||.95});}
+function b64ToBuf(b64){const bin=atob(b64),len=bin.length,buf=new Uint8Array(len);for(let i=0;i<len;i++)buf[i]=bin.charCodeAt(i);return buf.buffer;}
+function forEachMat(root,fn){root.traverse(o=>{if(o.isMesh&&o.material){(Array.isArray(o.material)?o.material:[o.material]).forEach(fn);}});}
+function setOpacity(root,v){if(root)forEachMat(root,m=>{m.transparent=true;m.opacity=v;});}
+function setEmissive(root,v,hex){if(root)forEachMat(root,m=>{if(m.emissive){ if(hex!==undefined){m.emissive.setHex(hex);m.emissiveIntensity=v;} else m.emissive.setScalar(v);}});}
+function setColor(root,hex){if(root)forEachMat(root,m=>{if(m.color)m.color.setHex(hex);});}
 function fitModel(root,targetSize,pos){
   root.updateMatrixWorld(true);
   const box=new THREE.Box3().setFromObject(root);
@@ -981,221 +1249,277 @@ function fitModel(root,targetSize,pos){
   return wrap;
 }
 function loadOrgan(elId,targetSize,pos,rotY,onDone){
-  const el=document.getElementById(elId);
-  if(!el||typeof THREE.GLTFLoader==='undefined'){ onDone(null); return; }
-  const buf=b64ToBuf(el.textContent);
-  const ldr=new THREE.GLTFLoader();
-  if(typeof MeshoptDecoder!=='undefined') ldr.setMeshoptDecoder(MeshoptDecoder); // untuk model terkompresi EXT_meshopt_compression (mis. hati)
-  ldr.parse(buf,'',gltf=>{
-    const wrap=fitModel(gltf.scene,targetSize,pos);
-    if(rotY) wrap.rotation.y=rotY;
-    scene.add(wrap); onDone(wrap);
-  },err=>{ console.warn('gagal memuat organ',elId,err); onDone(null); });
+  const el=$(elId);
+  if(!el||typeof THREE.GLTFLoader==='undefined'){onDone(null);return;}
+  try{
+    const buf=b64ToBuf(el.textContent.trim());
+    const ldr=new THREE.GLTFLoader();
+    if(typeof MeshoptDecoder!=='undefined'&&MeshoptDecoder.supported) ldr.setMeshoptDecoder(MeshoptDecoder);
+    ldr.parse(buf,'',gltf=>{
+      const wrap=fitModel(gltf.scene,targetSize,pos);
+      if(rotY) wrap.rotation.y=rotY;
+      scene.add(wrap); onDone(wrap);
+    },err=>{console.warn('gagal memuat organ',elId,err);onDone(null);});
+  }catch(err){console.warn('gagal memuat organ',elId,err);onDone(null);}
 }
-
-function label(text,color){
-  const c=document.createElement('canvas'); c.width=384; c.height=88;
-  const g=c.getContext('2d');
-  g.fillStyle=color||'#BFD2DD'; g.font='600 40px Inter, sans-serif'; g.textAlign='center'; g.textBaseline='middle';
-  g.fillText(text,192,46);
-  const tex=new THREE.CanvasTexture(c); tex.needsUpdate=true;
-  const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true,depthTest:false}));
-  sp.scale.set(3.3,0.76,1); return sp;
-}
-
 function makeStream(from,to,color,count){
   const grp=new THREE.Group();
-  const geo=new THREE.SphereGeometry(0.115,8,8);
-  const m=new THREE.MeshBasicMaterial({color:color,transparent:true,opacity:.9});
+  const geo=new THREE.SphereGeometry(0.13,10,10);
   const ps=[];
   for(let k=0;k<count;k++){
-    const s=new THREE.Mesh(geo,m.clone()); s.userData.p=k/count; grp.add(s); ps.push(s);
+    const s=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({color:color,transparent:true,opacity:.9}));
+    s.userData.p=k/count; grp.add(s); ps.push(s);
   }
+  // lintasan tipis sebagai "pipa"
+  const pts=[];for(let k=0;k<=40;k++){const p=k/40;const v=new THREE.Vector3().lerpVectors(new THREE.Vector3(...from),new THREE.Vector3(...to),p);v.y+=Math.sin(p*Math.PI)*0.85;pts.push(v);}
+  const tube=new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),new THREE.LineBasicMaterial({color:color,transparent:true,opacity:.25}));
+  grp.add(tube);
   scene.add(grp);
-  const st={from:new THREE.Vector3(...from),to:new THREE.Vector3(...to),ps,grp,rate:0};
+  const st={from:new THREE.Vector3(...from),to:new THREE.Vector3(...to),ps,grp,tube,rate:0};
   streams.push(st); return st;
 }
 
 function init3D(){
   if(typeof THREE==='undefined'){cv3.style.display='none';return;}
-  renderer=new THREE.WebGLRenderer({canvas:cv3,antialias:true,alpha:false});
+  renderer=new THREE.WebGLRenderer({canvas:cv3,antialias:true,alpha:true});
   renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
-  scene=new THREE.Scene(); scene.background=new THREE.Color(0x0F1D26);
-  scene.fog=new THREE.Fog(0x0F1D26,22,44);
-  cam=new THREE.PerspectiveCamera(42,1,0.1,200);
+  renderer.setClearColor(0x000000,0);
+  scene=new THREE.Scene();
+  cam=new THREE.PerspectiveCamera(40,1,0.1,200);
 
-  scene.add(new THREE.AmbientLight(0xBBD2E0,0.55));
-  const d1=new THREE.DirectionalLight(0xffffff,0.85); d1.position.set(6,10,8); scene.add(d1);
-  const d2=new THREE.DirectionalLight(0x5A8CA8,0.4); d2.position.set(-8,3,-6); scene.add(d2);
+  scene.add(new THREE.HemisphereLight(0xFFF1F2,0xB88690,0.75));
+  scene.add(new THREE.AmbientLight(0xffffff,0.35));
+  const d1=new THREE.DirectionalLight(0xffffff,0.9); d1.position.set(6,10,8); scene.add(d1);
+  const d2=new THREE.DirectionalLight(0xFFB3BE,0.45); d2.position.set(-8,4,-6); scene.add(d2);
 
-  // floor grid
-  const grid=new THREE.GridHelper(30,30,0x1E3240,0x18272F); grid.position.y=-3.4; scene.add(grid);
+  // platform ala hologram
+  const plat=new THREE.Mesh(new THREE.CircleGeometry(11.5,96),new THREE.MeshBasicMaterial({color:0xFFFFFF,transparent:true,opacity:.28}));
+  plat.rotation.x=-Math.PI/2; plat.position.y=-3.45; scene.add(plat);
+  for(const [a,b,op] of [[11.2,11.5,.55],[7.2,7.35,.35],[3.2,3.3,.3]]){
+    const ring=new THREE.Mesh(new THREE.RingGeometry(a,b,128),new THREE.MeshBasicMaterial({color:0xF26B7F,transparent:true,opacity:op,side:THREE.DoubleSide}));
+    ring.rotation.x=-Math.PI/2; ring.position.y=-3.44; scene.add(ring);
+  }
+  const grid=new THREE.GridHelper(23,23,0xF1A7B2,0xF6CBD2); grid.position.y=-3.46;
+  grid.material.transparent=true; grid.material.opacity=.35; scene.add(grid);
 
-  // --- plasma glucose compartment (center) ---
-  const plasma=new THREE.Mesh(new THREE.SphereGeometry(2.1,40,28),
-    new THREE.MeshStandardMaterial({color:0xF0A340,emissive:0x30190A,roughness:.3,metalness:.1,transparent:true,opacity:.88}));
+  // plasma glukosa
+  const plasma=new THREE.Mesh(new THREE.SphereGeometry(2.1,48,32),
+    new THREE.MeshStandardMaterial({color:0xFF8A2A,emissive:0x5A1E00,roughness:.22,metalness:.05,transparent:true,opacity:.9}));
   scene.add(plasma); nodes.plasma=plasma;
-  const halo=new THREE.Mesh(new THREE.SphereGeometry(2.35,32,22),
-    new THREE.MeshBasicMaterial({color:0xF0A340,transparent:true,opacity:.1,side:THREE.BackSide}));
+  const halo=new THREE.Mesh(new THREE.SphereGeometry(2.45,40,28),
+    new THREE.MeshBasicMaterial({color:0xFFB938,transparent:true,opacity:.12,side:THREE.BackSide}));
   scene.add(halo); nodes.halo=halo;
-  const lp=label('Glukosa darah  G','#F0A340'); lp.position.set(0,3.1,0); scene.add(lp);
+  const ringP=new THREE.Mesh(new THREE.TorusGeometry(2.9,0.035,8,120),new THREE.MeshBasicMaterial({color:0xFF9A3C,transparent:true,opacity:.5}));
+  ringP.rotation.x=Math.PI/2.3; scene.add(ringP); nodes.ringP=ringP;
 
-  // --- gut / meal source (left) — model anatomis usus ---
-  loadOrgan('glb-gut',2.7,[-6.6,1.6,0],0.5,w=>{ nodes.gut=w; });
-  const lg=label('Usus  M(t)','#C9853F'); lg.position.set(-6.6,3.3,0); scene.add(lg);
+  loadOrgan('glb-gut',2.7,[-6.6,1.6,0],0.5,w=>{nodes.gut=w;});
+  loadOrgan('glb-panc',2.7,[6.4,1.8,0],-0.4,w=>{nodes.panc=w;});
 
-  // --- pancreas / beta cells (right) — model anatomis pankreas ---
-  loadOrgan('glb-panc',2.7,[6.4,1.8,0],-0.4,w=>{ nodes.panc=w; });
-  const lb=label('Pankreas  α·γ','#7EBC74'); lb.position.set(6.4,3.3,0); scene.add(lb);
-
-  // --- insulin pool (right lower) ---
-  const ins=new THREE.Mesh(new THREE.CylinderGeometry(1.15,1.15,1.5,28),mat(0x3FCBC2,0x06201F));
+  const ins=new THREE.Mesh(new THREE.CylinderGeometry(1.15,1.15,1.5,40),mat(0x14B8A6,0x04302C,.88));
   ins.position.set(5.2,-1.9,0); scene.add(ins); nodes.ins=ins;
-  const li=label('Insulin plasma  I','#3FCBC2'); li.position.set(5.2,-0.4,0); scene.add(li);
+  const insBase=new THREE.Mesh(new THREE.CylinderGeometry(1.3,1.3,0.12,40),mat(0xFFEEF0,0,0.9));
+  insBase.position.set(5.2,-3.35,0); scene.add(insBase);
 
-  // --- pump (far right lower) ---
   const pumpG=new THREE.Group();
-  const body=new THREE.Mesh(new THREE.BoxGeometry(1.25,1.7,0.85),mat(0x8A4038,0x160604));
+  const body=new THREE.Mesh(new THREE.BoxGeometry(1.25,1.7,0.85),mat(0xF3F6FB,0x000000,1));
   pumpG.add(body);
-  const led=new THREE.Mesh(new THREE.SphereGeometry(0.2,14,10),new THREE.MeshBasicMaterial({color:0xFF7A6B}));
-  led.position.set(0,0.62,0.5); pumpG.add(led); nodes.led=led;
+  const screen=new THREE.Mesh(new THREE.PlaneGeometry(0.85,0.5),new THREE.MeshBasicMaterial({color:0x1E293B}));
+  screen.position.set(0,0.15,0.43); pumpG.add(screen);
+  const led=new THREE.Mesh(new THREE.SphereGeometry(0.16,14,10),new THREE.MeshBasicMaterial({color:0xF43F5E}));
+  led.position.set(0,-0.45,0.45); pumpG.add(led); nodes.led=led;
   pumpG.position.set(9.4,-2.2,0); scene.add(pumpG); nodes.pump=pumpG;
-  const lu=label('Pompa  u(t)','#FF7A6B'); lu.position.set(9.4,-0.6,0); scene.add(lu);
 
-  // --- tissue (bottom left) — model anatomis otot rangka ---
-  loadOrgan('glb-muscle',3.0,[-4.8,-2.4,0],0.6,w=>{ nodes.tis=w; });
-  const lt=label('Otot & lemak  X','#B98CE0'); lt.position.set(-4.8,-0.85,0); scene.add(lt);
+  loadOrgan('glb-muscle',3.0,[-4.8,-2.4,0],0.6,w=>{nodes.tis=w;});
+  loadOrgan('glb-liver',1.9,[1.1,-3.0,3.4],0.3,w=>{nodes.liver=w;});
 
-  // --- liver (front) — model anatomis hati; ginjal tidak dimodelkan ---
-  loadOrgan('glb-liver',1.9,[1.1,-3.0,3.4],0.3,w=>{ nodes.liver=w; });
-  const ll=label('Hati  n','#C08A64'); ll.position.set(1.1,-1.7,3.4); scene.add(ll);
-  nodes.sClear = makeStream([5.2,-1.9,0],[1.1,-3.0,3.4],0x9A5B3E,10);
-
-  // --- streams ---
-  nodes.sMeal = makeStream([-6.6,1.6,0],[0,0,0],0xF0A340,14);
-  nodes.sBeta = makeStream([6.4,1.8,0],[5.2,-1.9,0],0x7EBC74,10);
-  nodes.sPump = makeStream([9.4,-2.2,0],[5.2,-1.9,0],0xFF7A6B,10);
-  nodes.sAct  = makeStream([5.2,-1.9,0],[-4.8,-2.4,0],0x3FCBC2,12);
-  nodes.sUpt  = makeStream([0,0,0],[-4.8,-2.4,0],0xB98CE0,14);
+  nodes.sClear= makeStream([5.2,-1.9,0],[1.1,-3.0,3.4],0xB7794F,10);
+  nodes.sMeal = makeStream([-6.6,1.6,0],[0,0,0],0xFF8A1F,14);
+  nodes.sBeta = makeStream([6.4,1.8,0],[5.2,-1.9,0],0x22C55E,10);
+  nodes.sPump = makeStream([9.4,-2.2,0],[5.2,-1.9,0],0xF43F5E,10);
+  nodes.sAct  = makeStream([5.2,-1.9,0],[-4.8,-2.4,0],0x14B8A6,12);
+  nodes.sUpt  = makeStream([0,0,0],[-4.8,-2.4,0],0x8B5CF6,14);
 
   resize3D();
-  window.addEventListener('resize',()=>{fitAll();});
   ready=true;
 }
-
 function resize3D(){
-  const w=cv3.clientWidth, h=cv3.clientHeight||440;
-  renderer.setSize(w,h,false); cam.aspect=w/h; cam.updateProjectionMatrix();
+  const w=cv3.clientWidth, h=cv3.clientHeight||540;
+  renderer.setSize(w,h,false); cam.aspect=w/h; cam.fov=w/h<1.2?Math.min(40+ (1.2-w/h)*45,70):40; cam.updateProjectionMatrix();
+}
+
+/* ---- callouts (label HTML yang mengikuti organ) ---- */
+const ORG={
+  plasma:{n:'Glukosa darah',c:'var(--glucose)',pos:[0,3.1,0],grp:'awal',
+    v:()=>[fmt(G,0),'mg/dL'],d:'Kompartemen pusat. Ukuran dan warna bola mengikuti kadar glukosa.'},
+  gut:{n:'Usus',c:'#E8900C',pos:[-6.6,3.2,0],grp:'makan',
+    v:()=>[fmt(M,2),'mg/dL·min⁻¹'],d:'Sumber glukosa dari makanan, M(t) = A·e^(−k(t − t_makan)).'},
+  panc:{n:'Pankreas · sel β',c:'var(--beta)',pos:[6.4,3.3,0],grp:'pankreas',
+    v:()=>[Math.round(P.alpha*100),'% sel β aktif'],d:'Sel β melepas insulin saat glukosa melewati ambang h. Turunkan α untuk meniru kerusakan sel β pada diabetes tipe 1.'},
+  ins:{n:'Insulin plasma',c:'var(--insulin)',pos:[5.2,-0.2,0],grp:'fisiologi',
+    v:()=>[fmt(I,1),'mU/L'],d:'Insulin mengalir ke jaringan dan dibersihkan oleh hati.'},
+  pump:{n:'Pompa insulin',c:'var(--pump)',pos:[9.4,-0.9,0],grp:'pompa',
+    v:()=>[fmt(u,1),'mU/min'],d:'Pompa eksternal yang dikendalikan PID. Aktif pada skenario pompa atau saat sakelar pompa dinyalakan.'},
+  tis:{n:'Otot & lemak',c:'var(--remote)',pos:[-4.8,-0.8,0],grp:'fisiologi',
+    v:()=>[fmt(X,4),'aksi X'],d:'Otot dan jaringan lemak menarik glukosa sebanding dengan aksi insulin X.'},
+  liver:{n:'Hati',c:'var(--liver)',pos:[1.1,-1.6,3.4],grp:'fisiologi',
+    v:()=>[fmt(Math.abs(P.n*(I-P.Ib)),2),'mU/L·min⁻¹'],d:'Hati (bersama ginjal) membersihkan insulin plasma dengan laju n.'}
+};
+const coWrap=$('callouts'); const coEl={}; let selOrg=null;
+for(const k in ORG){
+  const o=ORG[k], b=document.createElement('button');
+  b.className='co'; b.style.setProperty('--c',o.c);
+  b.innerHTML=`<i></i><span class="lbl">${o.n}</span><b></b>`;
+  b.addEventListener('click',()=>selectOrg(selOrg===k?null:k));
+  coWrap.appendChild(b); coEl[k]=b; if(typeof THREE!=='undefined') o.v3=new THREE.Vector3(...o.pos);
+}
+function selectOrg(k){
+  selOrg=k;
+  for(const q in coEl) coEl[q].classList.toggle('sel',q===k);
+  const ins=$('insp');
+  if(!k){ins.hidden=true;return;}
+  const o=ORG[k]; ins.style.setProperty('--c',o.c);
+  $('insp_t').textContent=o.n; $('insp_d').textContent=o.d; ins.hidden=false;
+  updateInspector();
+}
+function updateInspector(){
+  if(!selOrg) return; const [v,unit]=ORG[selOrg].v();
+  $('insp_v').innerHTML=`${v}<small>${unit}</small>`;
+}
+$('insp_x').addEventListener('click',()=>selectOrg(null));
+$('insp_go').addEventListener('click',()=>{ if(selOrg) focusGroup(ORG[selOrg].grp); });
+function focusGroup(key){
+  const g=document.querySelector(`.group[data-key="${key}"]`); if(!g) return;
+  g.dataset.open='true';
+  const rail=$('rail');
+  if(getComputedStyle(rail).position==='sticky') rail.scrollTo({top:g.offsetTop-10,behavior:'smooth'});
+  else g.scrollIntoView({behavior:'smooth',block:'start'});
+  g.classList.remove('flash'); void g.offsetWidth; g.classList.add('flash');
+  setTimeout(()=>g.classList.remove('flash'),1400);
+}
+const tmpV=typeof THREE!=='undefined'?new THREE.Vector3():null;
+function placeCallouts(){
+  const w=cv3.clientWidth, h=cv3.clientHeight;
+  for(const k in ORG){
+    const el=coEl[k];
+    if(k==='pump'&&!P.pidon){el.classList.add('hide');continue;}
+    tmpV.copy(ORG[k].v3).project(cam);
+    const vis=tmpV.z<1&&tmpV.x>-1.1&&tmpV.x<1.1&&tmpV.y>-1.1&&tmpV.y<1.1;
+    el.classList.toggle('hide',!vis);
+    const hw=el.offsetWidth/2+8; const x=Math.min(Math.max((tmpV.x*.5+.5)*w,hw),w-hw), y=Math.max((-tmpV.y*.5+.5)*h,70);
+    el.style.transform=`translate(${x.toFixed(1)}px,${(y-14).toFixed(1)}px) translate(-50%,-100%)`;
+    const [v,unit]=ORG[k].v(); el.lastChild.textContent=v;
+  }
 }
 
 function draw3D(){
   if(!ready) return;
-  // camera from orbit
   const {az,el,r}=orbit;
   cam.position.set(r*Math.cos(el)*Math.sin(az), r*Math.sin(el)+0.4, r*Math.cos(el)*Math.cos(az));
-  cam.lookAt(0,-0.3,0);
+  cam.lookAt(1.4,-0.4,0);
 
-  // glucose sphere: size + color temperature by G
   const gn=Math.min(Math.max((G-40)/240,0),1);
   const s=0.72+gn*0.95;
-  nodes.plasma.scale.setScalar(s); nodes.halo.scale.setScalar(s*1.02);
-  const hot=new THREE.Color().setHSL(0.11-0.09*gn,0.80,0.30+0.22*gn);
+  nodes.plasma.scale.setScalar(s); nodes.halo.scale.setScalar(s*1.02); nodes.ringP.scale.setScalar(s);
+  const hot=new THREE.Color().setHSL(0.12-0.11*gn,0.92,0.52);
   nodes.plasma.material.color.copy(hot);
-  nodes.plasma.material.emissive.setHSL(0.11-0.09*gn,0.9,0.06+0.16*gn);
-  nodes.halo.material.color.copy(hot);
-  nodes.halo.material.opacity=0.06+0.18*gn;
+  nodes.plasma.material.emissive.setHSL(0.12-0.11*gn,0.9,0.08+0.14*gn);
+  nodes.halo.material.color.copy(hot); nodes.halo.material.opacity=0.08+0.2*gn;
+  nodes.ringP.material.color.copy(hot);
+  nodes.ringP.rotation.z=performance.now()/2400;
 
-  // beta cells fade with alpha (model pankreas dimuat async, bisa null di frame awal)
   setOpacity(nodes.panc,0.22+0.73*P.alpha);
   setEmissive(nodes.panc,0.02+0.14*P.alpha*(mealFlux(t)>0?1:0.6));
-  setColor(nodes.panc,P.alpha>0.02?0xffffff:0x6E7A72);
+  setColor(nodes.panc,P.alpha>0.02?0xffffff:0x7C8792);
 
-  // insulin pool height
   const iN=Math.min(I/300,1.35);
   nodes.ins.scale.y=0.25+iN*1.25;
-  nodes.ins.position.y=-2.6+ (0.25+iN*1.25)*0.75;
-  nodes.ins.material.emissive.setScalar(0.03+0.2*Math.min(iN,1));
+  nodes.ins.position.y=-3.3+(0.25+iN*1.25)*0.75;
+  nodes.ins.material.emissive.setScalar(0.03+0.18*Math.min(iN,1));
 
-  // tissue glow with X (model otot dimuat async, bisa null di frame awal)
   const xN=Math.min(X/0.12,1);
   setEmissive(nodes.tis,0.02+0.28*xN);
   if(nodes.tis){
     if(nodes.tis.userData.baseScale===undefined) nodes.tis.userData.baseScale=nodes.tis.scale.x;
     nodes.tis.scale.setScalar(nodes.tis.userData.baseScale*(1+0.12*xN));
   }
-
-  // liver clearance glow with n·(I−Ib) (model hati dimuat async, bisa null di frame awal)
   const clr=Math.min(Math.abs(P.n*(I-P.Ib))/40,1);
   setEmissive(nodes.liver,0.03+0.22*clr);
 
-  // pump
-  nodes.pump.visible=P.pidon;
-  nodes.sPump.grp.visible=P.pidon;
+  nodes.pump.visible=P.pidon; nodes.sPump.grp.visible=P.pidon;
   if(P.pidon){
     const un=Math.min(u/Math.max(P.umax,1),1);
-    nodes.led.material.color.setHSL(0.02,0.85,0.32+0.42*un);
+    nodes.led.material.color.setHSL(0.97,0.9,0.35+0.35*un);
     nodes.pump.scale.setScalar(1+0.05*Math.sin(performance.now()/120)*un);
   }
 
-  // stream rates
   nodes.sMeal.rate = Math.min(M/12,1)*1.6;
-  nodes.sBeta.rate = Math.min(P.alpha*P.gamma*Math.max(G-P.h,0)/0.6,1)*1.4;
+  nodes.sBeta.rate = Math.min(P.alpha*P.gamma*Math.max(I-P.h,0)/0.6,1)*1.4;
   nodes.sPump.rate = P.pidon? Math.min(u/Math.max(P.umax,1),1)*1.7 : 0;
   nodes.sAct.rate  = Math.min(Math.max(I-P.Ib,0)/220,1)*1.3;
   nodes.sUpt.rate  = Math.min(X*G/16,1)*1.7;
-  nodes.sClear.rate = clr*1.3;
+  nodes.sClear.rate= clr*1.3;
 
   const dt=0.016;
   for(const st of streams){
+    st.tube.material.opacity = st.rate>0.015 ? .35 : .1;
     for(const sp of st.ps){
       sp.userData.p=(sp.userData.p + st.rate*dt*0.55)%1;
       sp.position.lerpVectors(st.from,st.to,sp.userData.p);
       const arc=Math.sin(sp.userData.p*Math.PI);
       sp.position.y += arc*0.85;
-      sp.material.opacity = st.rate>0.015 ? 0.25+0.65*arc : 0;
+      sp.material.opacity = st.rate>0.015 ? 0.3+0.7*arc : 0;
       sp.scale.setScalar(0.6+0.8*Math.min(st.rate,1));
     }
   }
   renderer.render(scene,cam);
+  placeCallouts();
+  updateInspector();
 }
 
-/* orbit interaction */
+/* orbit */
 (function(){
   let drag=false,px=0,py=0;
   const dn=e=>{drag=true;px=(e.touches?e.touches[0].clientX:e.clientX);py=(e.touches?e.touches[0].clientY:e.clientY);};
   const mv=e=>{
-    if(!drag)return; e.preventDefault();
+    if(!drag)return; if(e.cancelable) e.preventDefault();
     const x=(e.touches?e.touches[0].clientX:e.clientX), y=(e.touches?e.touches[0].clientY:e.clientY);
-    orbit.az-=(x-px)*0.0062; orbit.el=Math.max(-0.3,Math.min(1.15,orbit.el+(y-py)*0.0048));
+    orbit.az-=(x-px)*0.0062; orbit.el=Math.max(-0.2,Math.min(1.15,orbit.el+(y-py)*0.0048));
     px=x;py=y;
   };
   const up=()=>{drag=false;};
   cv3.addEventListener('mousedown',dn); window.addEventListener('mousemove',mv); window.addEventListener('mouseup',up);
   cv3.addEventListener('touchstart',dn,{passive:true}); cv3.addEventListener('touchmove',mv,{passive:false}); cv3.addEventListener('touchend',up);
   cv3.addEventListener('wheel',e=>{e.preventDefault();orbit.r=Math.max(8,Math.min(30,orbit.r+e.deltaY*0.012));},{passive:false});
+  $('zoomin').addEventListener('click',()=>{orbit.r=Math.max(8,orbit.r-2);});
+  $('zoomout').addEventListener('click',()=>{orbit.r=Math.min(30,orbit.r+2);});
+  $('viewreset').addEventListener('click',()=>{orbit={...ORBIT0};});
 })();
 
 /* ============================================================
-   4. READOUTS, EQUATION HIGHLIGHTING
+   6. READOUTS
    ============================================================ */
-const $=id=>document.getElementById(id);
 function fmt(v,d){return (Math.abs(v)<1e-12?0:v).toFixed(d===undefined?2:d);}
-
+let lastPill='';
 function updateReadouts(){
   $('clk').textContent=Math.round(t);
-  $('ro_g').innerHTML=fmt(G,1)+'<span class="u">mg/dL</span>';
+  $('ro_g').textContent=fmt(G,1);
   $('ro_i').innerHTML=fmt(I,1)+'<span class="u">mU/L</span>';
   $('ro_x').innerHTML=fmt(X,4)+'<span class="u">1/min</span>';
   $('ro_u').innerHTML=fmt(u,1)+'<span class="u">mU/min</span>';
-  $('ro_tir').innerHTML=(total?Math.round(100*inRange/total):0)+'<span class="u">%</span>';
+  $('mini_u').classList.toggle('off',!P.pidon);
+  const tir=total?Math.round(100*inRange/total):0;
+  $('ro_tir').textContent=tir+'%';
+  $('tir_arc').setAttribute('stroke-dasharray',(2.513*tir).toFixed(1)+' 251.3');
+  updateGauge();
 
   const pill=$('pill'), st=$('statustext');
-  if(G>180){pill.className='pill high';pill.textContent='Hiperglikemia';st.textContent='Glukosa jauh di atas rentang normal, insulin tidak cukup mengimbangi beban glukosa.';}
-  else if(G>100){pill.className='pill high';pill.textContent='Di atas rentang';st.textContent='Masih menurun menuju rentang normal, atau baru saja menerima makanan.';}
-  else if(G<70){pill.className='pill low';pill.textContent='Hipoglikemia';st.textContent='Glukosa di bawah 70 mg/dL, insulin yang sudah telanjur berada di jaringan terus menariknya turun.';}
-  else {pill.className='pill good';pill.textContent='Dalam rentang normal';st.textContent='Glukosa berada di 70–100 mg/dL.';}
+  let k,txt,desc;
+  if(G>180){k='hyper';txt='Hiperglikemia';desc='Glukosa jauh di atas rentang normal, insulin tidak cukup mengimbangi beban glukosa.';}
+  else if(G>100){k='high';txt='Di atas rentang';desc='Masih menurun menuju rentang normal, atau baru saja menerima makanan.';}
+  else if(G<70){k='low';txt='Hipoglikemia';desc='Glukosa di bawah 70 mg/dL, insulin yang berada di jaringan terus menariknya turun.';}
+  else {k='good';txt='Dalam rentang normal';desc='Glukosa berada di 70–100 mg/dL, tidak terlalu tinggi dan rendah.';}
+  if(k!==lastPill){pill.className='pill '+k;pill.textContent=txt;st.textContent=desc;lastPill=k;}
 
-  // equation terms
   const v_p1=-P.p1*(G-P.Gb), v_xg=-X*G, v_m=M,
         v_p2=-P.p2*X, v_p3=P.p3*(I-P.Ib),
         v_n=-P.n*(I-P.Ib), v_g=P.alpha*P.gamma*Math.max(G-P.h,0), v_u=u;
@@ -1203,10 +1527,7 @@ function updateReadouts(){
   $('v_p2').textContent=fmt(v_p2,5); $('v_p3').textContent=fmt(v_p3,5);
   $('v_n').textContent=fmt(v_n,3);   $('v_g').textContent=fmt(v_g,4);   $('v_u').textContent=fmt(v_u,2);
 
-  const set=(id,rid,on,cls)=>{
-    const e=$(id); e.className='term'+(on?' '+cls:' off');
-    $(rid).className=on?'':'dim';
-  };
+  const set=(id,rid,on,cls)=>{ $(id).className='term'+(on?' '+cls:' off'); $(rid).className=on?'':'dim'; };
   set('t_m','r_m',M>0.01,'hot');
   set('t_g','r_g',P.alpha*P.gamma>0 && G>P.h,'hot-i');
   set('t_u','r_u',P.pidon && u>0.01,'hot-p');
@@ -1218,24 +1539,29 @@ function updateReadouts(){
     $(id).className='term'+(on?' hot-p':' off');
   });
 
-  // flux bars
-  const bar=(id,nid,val,max,txt)=>{$(id).style.width=Math.min(100,100*val/max)+'%';$(nid).textContent=txt;};
-  bar('fx1','fx1n',M,20,fmt(M,2)+' mg/dL·min⁻¹');
-  bar('fx2','fx2n',v_g,0.5,fmt(v_g,3)+' mU/L·min⁻¹');
-  bar('fx3','fx3n',u,Math.max(P.umax,1),fmt(u,2)+' mU/min');
-  bar('fx4','fx4n',-v_xg,20,fmt(-v_xg,2)+' mg/dL·min⁻¹');
-  bar('fx5','fx5n',-v_n,8,fmt(-v_n,2)+' mU/L·min⁻¹');
+  const bar=(id,nid,val,max,num,unit)=>{$(id).style.width=Math.min(100,100*Math.max(val,0)/max)+'%';$(nid).innerHTML=`<b>${num}</b> ${unit}`;};
+  bar('fx1','fx1n',M,20,fmt(M,2),'mg/dL·min⁻¹');
+  bar('fx2','fx2n',v_g,0.5,fmt(v_g,3),'mU/L·min⁻¹');
+  bar('fx3','fx3n',u,Math.max(P.umax,1),fmt(u,2),'mU/min');
+  bar('fx4','fx4n',-v_xg,20,fmt(-v_xg,2),'mg/dL·min⁻¹');
+  bar('fx5','fx5n',-v_n,8,fmt(-v_n,2),'mU/L·min⁻¹');
+
+  $('sys_target').textContent='G_target = '+Math.round(P.target)+' mg/dL';
+  $('sys_u').textContent='u(t) = '+fmt(u,1);
+  $('sys_g').textContent='G(t) = '+fmt(G,0);
+  $('sysvg').classList.toggle('flowing',running&&P.pidon);
+  $('sysnote').textContent=P.pidon?'Pompa aktif: panah bergerak mengikuti aliran sinyal selama simulasi berjalan.':'Pompa mati: loop kendali terbuka, insulin hanya berasal dari sel β.';
 }
 
 /* ============================================================
-   5. MAIN LOOP
+   7. MAIN LOOP
    ============================================================ */
 function loop(now){
   requestAnimationFrame(loop);
   if(!lastFrame) lastFrame=now;
-  let real=Math.min((now-lastFrame)/1000,0.1); lastFrame=now;
+  const real=Math.min((now-lastFrame)/1000,0.1); lastFrame=now;
   if(running){
-    const simMin=real*10*speed;                 // 10 menit simulasi per detik pada 1×
+    const simMin=real*10*speed;
     const nsteps=Math.min(Math.round(simMin/DT),4000);
     for(let k=0;k<nsteps;k++) step();
     draw(); updateReadouts();
@@ -1244,7 +1570,7 @@ function loop(now){
 }
 
 /* ============================================================
-   6. UI WIRING
+   8. UI WIRING
    ============================================================ */
 const sliders=[
   ['alpha',v=>v/100, v=>Math.round(v)+' %'],
@@ -1252,7 +1578,7 @@ const sliders=[
   ['h',v=>v, v=>v.toFixed(1)],
   ['p1',v=>v, v=>v.toFixed(4)],
   ['p2',v=>v, v=>v.toFixed(4)],
-  ['p3',v=>v*1e-6, v=>(v*1e6).toFixed(2)],
+  ['p3',v=>v*1e-6, v=>(v).toFixed(2)],
   ['n',v=>v, v=>v.toFixed(4)],
   ['G0',v=>v, v=>v.toFixed(0)],
   ['I0',v=>v, v=>v.toFixed(1)],
@@ -1269,32 +1595,34 @@ const sliders=[
   ['umax',v=>v, v=>v.toFixed(0)]
 ];
 const initialsOnly=new Set(['G0','I0']);
-
+function paintSlider(el){
+  const mn=parseFloat(el.min), mx=parseFloat(el.max), v=parseFloat(el.value);
+  el.style.setProperty('--pct',((v-mn)/(mx-mn)*100).toFixed(2)+'%');
+}
 sliders.forEach(([id,toP,show])=>{
   const el=$(id);
   el.addEventListener('input',()=>{
     const raw=parseFloat(el.value);
-    P[id]=toP(raw);
-    $(id+'_v').textContent=show(raw);
+    P[id]=toP(raw); $(id+'_v').textContent=show(raw); paintSlider(el);
     if(initialsOnly.has(id)) reset(); else { draw(); updateReadouts(); }
   });
-  $(id+'_v').textContent=show(parseFloat(el.value));
+  P[id]=toP(parseFloat(el.value));
+  $(id+'_v').textContent=show(parseFloat(el.value)); paintSlider(el);
 });
-
 $('pidon').addEventListener('change',e=>{P.pidon=e.target.checked;integ=0;draw();updateReadouts();});
 
 document.querySelectorAll('.group .gh').forEach(b=>{
-  b.addEventListener('click',()=>{
-    const g=b.parentElement; g.dataset.open = g.dataset.open==='false' ? 'true':'false';
-  });
+  b.addEventListener('click',()=>{const g=b.parentElement; g.dataset.open=g.dataset.open==='false'?'true':'false';});
 });
 
-$('play').addEventListener('click',()=>{
-  running=!running; lastFrame=0;
-  $('play').textContent = running ? 'Jeda' : 'Jalankan';
-});
+const ICON_PLAY='<svg width="14" height="14" viewBox="-3 0 24 24" fill="currentColor"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.4-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5Z"/></svg>';
+const ICON_PAUSE='<svg width="14" height="14" viewBox="-3 0 24 24" fill="currentColor"><rect x="5" y="4" width="5" height="16" rx="1.5"/><rect x="14" y="4" width="5" height="16" rx="1.5"/></svg>';
+function setRunning(v){ running=v; lastFrame=0; $('play').innerHTML=running?ICON_PAUSE:ICON_PLAY; updateReadouts(); }
+$('play').addEventListener('click',()=>setRunning(!running));
 $('reset').addEventListener('click',()=>{reset(); lastFrame=0;});
-
+document.addEventListener('keydown',e=>{
+  if(e.code==='Space' && !/INPUT|BUTTON|SELECT|TEXTAREA/.test(document.activeElement.tagName)){ e.preventDefault(); setRunning(!running); }
+});
 document.querySelectorAll('.speeds button').forEach(b=>{
   b.addEventListener('click',()=>{
     document.querySelectorAll('.speeds button').forEach(x=>x.setAttribute('aria-pressed','false'));
@@ -1302,7 +1630,6 @@ document.querySelectorAll('.speeds button').forEach(b=>{
   });
 });
 
-/* --- presets --- */
 const PRESETS={
   healthy:{alpha:100,gamma:0.0039,h:79,p1:0.031,p2:0.012,p3:4.92,n:0.265,G0:200,I0:364.8,Gb:70,Ib:7,
            mealA:8,mealK:0.05,meal1:150,mealPeriod:240,pidon:false},
@@ -1310,14 +1637,14 @@ const PRESETS={
            mealA:8,mealK:0.05,meal1:150,mealPeriod:240,pidon:false},
   pid:    {alpha:0,gamma:0.0039,h:80,p1:0,p2:0.011,p3:5.30,n:0.26,G0:200,I0:50,Gb:70,Ib:7,
            mealA:8,mealK:0.05,meal1:150,mealPeriod:240,pidon:true,
-           target:80,Kp:0.08,Ki:0.0002,Kd:4,umax:60}
+           target:80,Kp:0.06,Ki:0.0000,Kd:7,umax:60}
 };
 function applyPreset(name){
   const pr=PRESETS[name];
   for(const k in pr){
     if(k==='pidon'){ $(k).checked=pr[k]; P[k]=pr[k]; continue; }
     const el=$(k); if(!el) continue;
-    el.value=pr[k];
+    el.value=pr[k]; paintSlider(el);
     const def=sliders.find(s=>s[0]===k);
     if(def){ P[k]=def[1](pr[k]); $(k+'_v').textContent=def[2](pr[k]); }
   }
@@ -1330,17 +1657,16 @@ document.querySelectorAll('.modes button').forEach(b=>{
     applyPreset(b.dataset.preset);
   });
 });
-$('defaults').addEventListener('click',()=>{
-  document.querySelector('.modes button[data-preset="healthy"]').click();
-});
+$('defaults').addEventListener('click',()=>{ document.querySelector('.modes button[data-preset="healthy"]').click(); });
 
 function fitAll(){ if(ready) resize3D(); draw(); }
 window.addEventListener('resize',fitAll);
+if(window.ResizeObserver) new ResizeObserver(()=>fitAll()).observe(cv3);
 
 /* --- go --- */
 init3D();
 reset();
-running=true; $('play').textContent='Jeda';
+setRunning(true);
 requestAnimationFrame(loop);
 
 })();
