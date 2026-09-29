@@ -444,7 +444,7 @@ footer{max-width:1480px;margin:0 auto;padding:0 26px 50px;font-size:12.5px;color
           <text class="sbt" x="100" y="93" text-anchor="middle">Target glukosa</text>
           <text class="sbs" x="100" y="112" text-anchor="middle">G_target = 80 mg/dL</text>
           <line x1="180" y1="100" x2="216" y2="100" class="sarr" marker-end="url(#sa)"/>
-          <text class="slbl" x="198" y="92" text-anchor="middle">+</text>
+          <text class="slbl" x="198" y="92" text-anchor="middle">-</text>
 
           <!-- 2. controller -->
           <rect class="sb" x="220" y="70" width="160" height="60" rx="8" stroke="var(--remote)"/>
@@ -474,9 +474,9 @@ footer{max-width:1480px;margin:0 auto;padding:0 26px 50px;font-size:12.5px;color
           <text class="sbs" x="900" y="112" text-anchor="middle">G(t)</text>
 
           <!-- feedback loop -->
-          <path d="M900 130 L900 196 L300 196 L300 130" class="sarr" marker-end="url(#sa)"/>
+          <path d="M900 130 L900 196 L200 196 L200 100" class="sarr" marker-end="url(#sa)"/>
           <text class="slbl" x="600" y="213" text-anchor="middle">e(t) = G(t) - G_target</text>
-          <text class="slbl" x="322" y="145" text-anchor="middle">−</text>
+          <text class="slbl" x="212" y="145" text-anchor="middle">+</text>
         </svg>
       </div>
       <!-- <p class="syscap">Struktur ini mengikuti skema loop tertutup pada Gambar 3 paper rujukan (Desired BG → Controller → Insulin Pump → Patient → BG Sensor → umpan balik), dipetakan ke notasi model minimal Bergman pada Persamaan (1)–(2) di paper yang sama. Paper juga menggambar gangguan <em>Exercise</em> di samping <em>Meal</em> pada blok pasien (Gambar 3) dan mengasumsikan sensor sempurna tanpa derau — simulator ini mengikuti asumsi sensor ideal yang sama, tetapi baru memodelkan gangguan makan M(t); efek olahraga belum diimplementasikan.</p> -->
