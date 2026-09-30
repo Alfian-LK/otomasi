@@ -599,7 +599,7 @@ footer{max-width:1560px;margin:0 auto;padding:0 20px 40px;font-size:12px;color:v
 
 <!-- ===================== SYSTEM DIAGRAM ===================== -->
 <section class="sys glass card">
-  <div class="card-h"><h2>Diagram sistem</h2><span class="sub">loop tertutup pankreas buatan</span></div>
+  <div class="card-h"><h2>Diagram sistem</h2></div>
   <div class="syswell">
     <svg viewBox="0 0 1000 240" id="sysvg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Diagram loop kendali PID pada model Bergman">
       <defs>
@@ -645,7 +645,7 @@ footer{max-width:1560px;margin:0 auto;padding:0 20px 40px;font-size:12px;color:v
 
 <!-- ===================== MATH ===================== -->
 <section class="math glass card">
-  <div class="card-h"><h2>Model matematika</h2><span class="sub">suku aktif disorot</span></div>
+  <div class="card-h"><h2>Model matematika</h2></div>
   <div class="mathgrid"><div class="eq" id="eqbox">
     <span class="line">
       <span class="dotover"><var>G</var></span> =
@@ -682,7 +682,7 @@ footer{max-width:1560px;margin:0 auto;padding:0 20px 40px;font-size:12px;color:v
       <tr id="r_p2"><td>−<var>p</var><sub>2</sub><var>X</var></td><td>Aksi insulin di jaringan yang memudar</td><td class="num" id="v_p2">—</td></tr>
       <tr id="r_p3"><td>+<var>p</var><sub>3</sub>[<var>I</var>−<var>I</var><sub>b</sub>]</td><td>Insulin darah membangkitkan aksi di jaringan</td><td class="num" id="v_p3">—</td></tr>
       <tr id="r_n"><td>−<var>n</var>[<var>I</var>−<var>I</var><sub>b</sub>]</td><td>Insulin dibersihkan hati dan ginjal</td><td class="num" id="v_n">—</td></tr>
-      <tr id="r_g"><td>+αγ·max(<var>I</var>−<var>h</var>,0)</td><td>Sekresi insulin sel β saat glukosa di atas ambang</td><td class="num" id="v_g">—</td></tr>
+      <tr id="r_g"><td>+αγ·max(<var>G</var>−<var>h</var>,0)</td><td>Sekresi insulin sel β saat glukosa di atas ambang</td><td class="num" id="v_g">—</td></tr>
       <tr id="r_u"><td>+<var>u</var>(<var>t</var>)</td><td>Insulin dari pompa luar, diatur PID</td><td class="num" id="v_u">—</td></tr>
     </tbody>
   </table>
@@ -1550,7 +1550,6 @@ function updateReadouts(){
   $('sys_u').textContent='u(t) = '+fmt(u,1);
   $('sys_g').textContent='G(t) = '+fmt(G,0);
   $('sysvg').classList.toggle('flowing',running&&P.pidon);
-  $('sysnote').textContent=P.pidon?'Pompa aktif: panah bergerak mengikuti aliran sinyal selama simulasi berjalan.':'Pompa mati: loop kendali terbuka, insulin hanya berasal dari sel β.';
 }
 
 /* ============================================================
